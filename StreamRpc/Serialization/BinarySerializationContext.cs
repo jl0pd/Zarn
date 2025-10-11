@@ -1,0 +1,217 @@
+using System.Buffers;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using StreamRpc.Serialization.Serializers;
+
+namespace StreamRpc.Serialization;
+
+public sealed class BinarySerializationContext
+{
+    private readonly Dictionary<Type, BinarySerializer> _instances = new()
+    {
+        [typeof(Type)] = TypeBinarySerializer.Instance,
+        [typeof(MethodInfo)] = MethodInfoBinarySerializer.Instance,
+        [typeof(byte)] = ByteBinarySerializer.Instance,
+        [typeof(short)] = PackedShortBinarySerializer.Instance,
+        [typeof(int)] = PackedIntBinarySerializer.Instance,
+        [typeof(long)] = PackedLongBinarySerializer.Instance,
+        [typeof(bool)] = BoolBinarySerializer.Instance,
+        [typeof(string)] = StringBinarySerializer.Instance,
+        [typeof(byte[])] = ByteArrayBinarySerializer.Instance,
+        [typeof(ReadOnlyMemory<byte>)] = ByteReadOnlyMemoryBinarySerializer.Instance,
+    };
+
+    private readonly List<BinarySerializerFactory> _factories = 
+    [
+        EnumBinarySerializerFactory.Instance,
+        UnmanagedBinarySerializerFactory.Instance,
+        ArrayBinarySerializerFactory.Instance,
+    ];
+
+    private readonly JsonBinarySerializerFactory _jsonFactory = new();
+
+    private readonly MemoryProvider? _memoryProvider;
+
+    public BinarySerializationContext(BinarySerializationSettings settings)
+    {
+        _memoryProvider = settings.MemoryProvider;
+
+        foreach (var serializer in settings.Serializers)
+        {
+            if (serializer is BinarySerializerFactory factory)
+            {
+                _factories.Add(factory);
+            }
+            else
+            {
+                var serializerType = serializer.GetType();
+                Debug.Assert(serializerType.IsConstructedGenericType &&
+                             serializerType.GetGenericTypeDefinition() == typeof(BinarySerializer<>),
+                             "Only factory & generic serializers are implementable");
+
+                var valueType = serializerType.GetGenericArguments()[0];
+                _instances.Add(valueType, serializer);
+            }
+        }
+    }
+
+    public BinarySerializer GetSerializer(Type type)
+    {
+        if (_instances.TryGetValue(type, out var serializer))
+        {
+            return serializer;
+        }
+        return GetSerializerSlow(type);
+    }
+
+    private BinarySerializer GetSerializerSlow(Type type)
+    {
+        if ((GetSerializerFromFactory(type) ??
+             GetSerializerFromInstance(type) ??
+             GetSerializerFromAttribute(type)) is { } ser)
+        {
+            return ser;
+        }
+        ;
+        return _instances[type] = _jsonFactory.CreateSerializer(type);
+    }
+
+    private BinarySerializer? GetSerializerFromAttribute(Type type)
+    {
+        if (type.GetCustomAttribute<BinarySerializerAttribute>() is { } binSerAttr)
+        {
+            var serInst = Activator.CreateInstance(binSerAttr.SerializerType)!;
+            if (binSerAttr.SerializerType.IsAssignableTo(typeof(BinarySerializerFactory)))
+            {
+                var factory = (BinarySerializerFactory)serInst;
+                _factories.Add(factory);
+                return factory.CreateSerializer(type);
+            }
+            else
+            {
+                var ser2 = (BinarySerializer)serInst;
+                _instances[type] = ser2;
+                return ser2;
+            }
+        }
+
+        return null;
+    }
+
+    private BinarySerializer? GetSerializerFromFactory(Type type)
+    {
+        foreach (var factory in _factories)
+        {
+            if (factory.CanConvert(type))
+            {
+                var serializer = factory.CreateSerializer(type);
+                _instances[type] = serializer;
+                return serializer;
+            }
+        }
+
+        return null;
+    }
+
+    private BinarySerializer? GetSerializerFromInstance(Type type)
+    {
+        foreach (var (_, inst) in _instances)
+        {
+            if (inst.CanConvert(type))
+            {
+                _instances[type] = inst;
+                return inst;
+            }
+        }
+
+        return null;
+    }
+
+    public BinarySerializer<T> GetSerializer<T>()
+    {
+        return (BinarySerializer<T>)GetSerializer(typeof(T));
+    }
+
+    public void SerializeAny(object? value, IBufferWriter<byte> writer)
+    {
+        if (value is null)
+        {
+            writer.GetSpan()[0] = (byte)ObjectType.Null;
+            writer.Advance(1);
+        }
+        else
+        {
+            var serializer = GetSerializer(value.GetType());
+            writer.Write(serializer.TypePrefix);
+            serializer.Serialize(value, value.GetType(), writer, this);
+        }
+    }
+
+    public object? DeserializeAny(ref ReadOnlySequenceReader<byte> source)
+    {
+        var objType = (ObjectType)source.FirstSpan[0];
+        source.Advance(1);
+        if (objType == ObjectType.Null)
+        {
+            return null;
+        }
+        else
+        {
+            object? result = objType switch
+            {
+                ObjectType.String => GetSerializer<string>().Deserialize(ref source, this),
+                ObjectType.Int => GetSerializer<int>().Deserialize(ref source, this),
+                ObjectType.Type => GetSerializer<Type>().Deserialize(ref source, this),
+                ObjectType.Byte | ObjectType.Array => GetSerializer<byte[]>().Deserialize(ref source, this),
+                ObjectType.Byte => GetSerializer<byte>().Deserialize(ref source, this),
+                ObjectType.Method => GetSerializer<MethodInfo>().Deserialize(ref source, this),
+                ObjectType.Custom => ReadCustomObject(ref source),
+                _ => throw new InvalidDataException(),
+            };
+            return result;
+        }
+    }
+
+    private object? ReadCustomObject(ref ReadOnlySequenceReader<byte> source)
+    {
+        var type = GetSerializer<Type>().Deserialize(ref source, this);
+        var binarySerializer = GetSerializer(type);
+        var result = binarySerializer.Deserialize(type, ref source, this);
+        return result;
+    }
+
+    [SuppressMessage("Usage", "CA2263:Prefer generic overload when type is known")]
+    public void Serialize<T>(T value, IBufferWriter<byte> writer)
+    {
+        var serializer = GetSerializer(typeof(T));
+        if (serializer is BinarySerializer<T> ser)
+        {
+            ser.Serialize(value, writer, this);
+        }
+        else
+        {
+            serializer.Serialize(value, typeof(T), writer, this);
+        }
+    }
+
+    [SuppressMessage("Usage", "CA2263:Prefer generic overload when type is known")]
+    public T Deserialize<T>(ref ReadOnlySequenceReader<byte> source)
+    {
+        var serializer = GetSerializer(typeof(T));
+        if (serializer is BinarySerializer<T> ser)
+        {
+            return ser.Deserialize(ref source, this);
+        }
+        else
+        {
+            return (T)serializer.Deserialize(typeof(T), ref source, this)!;
+        }
+    }
+
+    public IMemoryOwner<byte> ToMemory(ReadOnlySequence<byte> source)
+        => _memoryProvider?.ToMemory(source) ?? new ArrayMemoryOwner<byte>(source.ToArray());
+
+    public IMemoryOwner<byte> ToMemory(ReadOnlySpan<byte> source)
+        => _memoryProvider?.ToMemory(source) ?? new ArrayMemoryOwner<byte>(source.ToArray());
+}
