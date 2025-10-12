@@ -23,9 +23,9 @@ internal sealed class InvokerFactory
 
         _cache = new Cache<InvokerBase>(() =>
         {
-            var Invoker = (InvokerBase)Activator.CreateInstance(ImplementationType)!;
-            Invoker.MethodSlots = MethodsTable;
-            return Invoker;
+            var invoker = (InvokerBase)Activator.CreateInstance(ImplementationType)!;
+            invoker.MethodSlots = MethodsTable;
+            return invoker;
         });
     }
 
@@ -39,9 +39,9 @@ internal sealed class InvokerFactory
         return _cache.Get();
     }
 
-    public void Return(InvokerBase Invoker)
+    public void Return(InvokerBase invoker)
     {
-        Debug.Assert(Invoker.ImplementedInterface == InterfaceType);
-        _cache.Return(Invoker);
+        Debug.Assert(invoker.ImplementedInterface == InterfaceType);
+        _cache.Return(invoker);
     }
 }

@@ -33,12 +33,12 @@ internal sealed class ConnectionContext
         SerializationContext = pools.SerializationContext; // keep it closer
     }
 
-    public InvokerBase GetInvoker(Type InvokerType)
+    public InvokerBase GetInvoker(Type invokerType)
     {
         int typeSlot = -1;
-        Type interfaceType = InvokerType.IsConstructedGenericType
-                                ? InvokerType.GetGenericTypeDefinition()
-                                : InvokerType;
+        Type interfaceType = invokerType.IsConstructedGenericType
+                                ? invokerType.GetGenericTypeDefinition()
+                                : invokerType;
 
         var factories = Pools.InvokerFactories;
         for (int i = 0; i < factories.Length; i++)
@@ -52,23 +52,23 @@ internal sealed class ConnectionContext
 
         if (typeSlot < 0)
         {
-            throw new KeyNotFoundException("Unable to find implementation for type" + InvokerType);
+            throw new KeyNotFoundException("Unable to find implementation for type" + invokerType);
         }
 
-        InvokerBase Invoker;
-        if (InvokerType.IsConstructedGenericType)
+        InvokerBase invoker;
+        if (invokerType.IsConstructedGenericType)
         {
-            Invoker = factories[typeSlot].GetInvoker(InvokerType.GetGenericArguments());
+            invoker = factories[typeSlot].GetInvoker(invokerType.GetGenericArguments());
         }
         else
         {
-            Invoker = factories[typeSlot].GetInvoker();
+            invoker = factories[typeSlot].GetInvoker();
         }
-        Invoker.Connection = this;
-        Invoker.TypeSlot = typeSlot + 1;
-        Invoker.Id = OperationId.GenObjectId();
+        invoker.Connection = this;
+        invoker.TypeSlot = typeSlot + 1;
+        invoker.Id = OperationId.GenObjectId();
 
-        return Invoker;
+        return invoker;
     }
 
     public async Task SendMessages(CancellationToken cancellationToken)
