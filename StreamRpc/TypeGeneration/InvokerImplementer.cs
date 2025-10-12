@@ -12,13 +12,12 @@ internal static class InvokerImplementer
     private static readonly ConcurrentDictionary<Type, Lazy<Type>> s_types = [];
     private static readonly ModuleBuilder s_module;
     private static readonly ConstructorInfo InvokerBase_ctor;
-    private static readonly MethodInfo InvokerBase_BeginCall;
+    private static readonly MethodInfo InvokerBase_BeginCallT;
+    private static readonly MethodInfo InvokerBase_BeginVoidCall;
     private static readonly MethodInfo InvokerBase_CompleteCallT;
     private static readonly MethodInfo InvokerBase_CompleteVoidCall;
     private static readonly MethodInfo InvokerBase_SynchronousWaitValueResultT;
     private static readonly MethodInfo InvokerBase_SynchronousWaitVoidValueResult;
-    private static readonly MethodInfo InvokerBase_SynchronousWaitResultT;
-    private static readonly MethodInfo InvokerBase_SynchronousWaitVoidResult;
     private static readonly MethodInfo InvokerBase_GetMethodSlot;
     private static readonly MethodInfo InvokerBase_GetTypeSlot;
     private static readonly MethodInfo InvokerBase_Get_SerializationContext;
@@ -38,13 +37,12 @@ internal static class InvokerImplementer
 
         var typeInfo = typeof(InvokerBase).GetTypeInfo();
         InvokerBase_ctor = typeInfo.DeclaredConstructors.Single();
-        InvokerBase_BeginCall = typeInfo.GetDeclaredMethod(nameof(InvokerBase.BeginCall))!;
+        InvokerBase_BeginCallT = typeInfo.GetDeclaredMethod(nameof(InvokerBase.BeginCall))!;
+        InvokerBase_BeginVoidCall = typeInfo.GetDeclaredMethod(nameof(InvokerBase.BeginVoidCall))!;
         InvokerBase_CompleteCallT = typeInfo.GetDeclaredMethod(nameof(InvokerBase.CompleteCall))!;
         InvokerBase_CompleteVoidCall = typeInfo.GetDeclaredMethod(nameof(InvokerBase.CompleteVoidCall))!;
         InvokerBase_SynchronousWaitValueResultT = typeInfo.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitValueResult))!;
         InvokerBase_SynchronousWaitVoidValueResult = typeInfo.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidValueResult))!;
-        InvokerBase_SynchronousWaitResultT = typeInfo.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitResult))!;
-        InvokerBase_SynchronousWaitVoidResult = typeInfo.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidResult))!;
         InvokerBase_GetMethodSlot = typeInfo.GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
         InvokerBase_GetTypeSlot = typeInfo.GetDeclaredProperty(nameof(InvokerBase.TypeSlot))!.GetGetMethod(true)!;
         InvokerBase_Get_SerializationContext = typeInfo.GetDeclaredProperty(nameof(InvokerBase.SerializationContext))!.GetGetMethod(true)!;
@@ -90,7 +88,9 @@ internal static class InvokerImplementer
 
         var il = method.GetILGenerator();
 
-        var opIdLocal = il.DeclareLocal(typeof(OperationId));
+        var opLocal = il.DeclareLocal(returnValueType == typeof(void)
+                                        ? typeof(VoidInvokerOperation)
+                                        : typeof(InvokerOperation<>).MakeGenericType([returnValueType]));
         var ctLocal = il.DeclareLocal(typeof(CancellationToken));
         var bufferWriterLocal = il.DeclareLocal(typeof(IBufferWriter<byte>));
 
@@ -99,11 +99,18 @@ internal static class InvokerImplementer
         il.Emit(OpCodes.Ldloca, ctLocal);
         il.Emit(OpCodes.Initobj, typeof(CancellationToken));
 
-        // var bufferWriter = base.BeginCall(out OperationId, cancellationToken);
+        // var bufferWriter = base.BeginCall(out invokerOperation, cancellationToken);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, opIdLocal);
+        il.Emit(OpCodes.Ldloca, opLocal);
         il.Emit(OpCodes.Ldloc, ctLocal);
-        il.Emit(OpCodes.Call, InvokerBase_BeginCall);
+        if (returnValueType == typeof(void))
+        {
+            il.Emit(OpCodes.Call, InvokerBase_BeginVoidCall);
+        }
+        else
+        {
+            il.Emit(OpCodes.Call, InvokerBase_BeginCallT.MakeGenericMethod([returnValueType]));
+        }
         il.Emit(OpCodes.Stloc, bufferWriterLocal);
 
         // base.SerializationContext.Serialize(base.TypeSlot, bufferWriter);
@@ -125,7 +132,7 @@ internal static class InvokerImplementer
         il.Emit(OpCodes.Ldarg_0);
         {
             var ifNotNull = il.DefineLabel();
-            
+
             // _methodInfo ??= methodof(interfaceMethod)
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, methodInfoField);
@@ -160,11 +167,11 @@ internal static class InvokerImplementer
             il.Emit(OpCodes.Call, SerializationContext_SerializeT.MakeGenericMethod(parameters[i].ParameterType));
         }
 
-        // var task = base.CompleteCall<retType>(bufferWriter, MessageOptions.None, opId, cancellationToken);
+        // var task = base.CompleteCall<retType>(bufferWriter, MessageOptions.None, operation, cancellationToken);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bufferWriterLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, opIdLocal);
+        il.Emit(OpCodes.Ldloc, opLocal);
         il.Emit(OpCodes.Ldloc, ctLocal);
         if (returnValueType == typeof(void))
         {

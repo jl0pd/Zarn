@@ -7,19 +7,24 @@ namespace StreamRpc.Protocol;
 
 internal abstract class InvokerBase
 {
-    internal ConnectionContext Connection { get; set; } = null!;
-
     internal protected abstract Type ImplementedInterface { get; }
 
-    internal Guid Id { get; set; }
+    internal InvokerState State
+    {
+        get => _state;
+        set
+        {
+            _state = value;
+            SerializationContext = value.Connection.SerializationContext;
+        }
+    }
+    private InvokerState _state = null!;
 
     internal MethodInfo?[] MethodSlots { get; set; } = [];
 
-    internal protected BinarySerializationContext SerializationContext => Connection.SerializationContext;
+    internal protected BinarySerializationContext SerializationContext { get; private set; } = null!;
 
-    private int _opId;
-
-    protected internal int TypeSlot { get; set; }
+    internal protected int TypeSlot { get; set; }
 
     internal protected int GetMethodSlot(MethodInfo method)
     {
@@ -27,42 +32,57 @@ internal abstract class InvokerBase
         var idx = Array.IndexOf(MethodSlots, method);
         if (idx < 0)
         {
-            throw new InvalidOperationException("Server does not support given method: " + method);
+            throw new InvalidOperationException("Other side does not support given method: " + method);
         }
 
         return idx + 1;
     }
 
-    internal protected IBufferWriter<byte> BeginCall(out OperationId operationId, CancellationToken cancellationToken)
+    internal protected IBufferWriter<byte> BeginCall<T>(out InvokerOperation<T> operation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var writer = Connection.Pools.GetWriter();
+        var writer = State.Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
         SerializationContext.Serialize(MessageOptions.None, writer);
         SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
 
-        // TODO: handle overflow & free id list
-        operationId = new OperationId(Id, (short)Interlocked.Increment(ref _opId));
-        SerializationContext.Serialize(operationId, writer);
+        operation = State.CreateOperation<T>();
+        SerializationContext.Serialize(new OperationId(State.Id, operation.Token), writer);
 
         return writer;
     }
 
-    internal protected ValueTask<T> CompleteCall<T>(IBufferWriter<byte> writer, MessageOptions options, OperationId operationId, CancellationToken cancellationToken)
+    internal protected IBufferWriter<byte> BeginVoidCall(out VoidInvokerOperation operation, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var writer = State.Connection.Pools.GetWriter();
+        writer.Reserve(PackedInt.MaxSize);
+        SerializationContext.Serialize(MessageOptions.None, writer);
+        SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
+
+        operation = State.CreateOperation();
+        SerializationContext.Serialize(new OperationId(State.Id, operation.Token), writer);
+
+        return writer;
+    }
+
+    internal protected ValueTask<T> CompleteCall<T>(IBufferWriter<byte> writer, MessageOptions options, InvokerOperation<T> operation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var chunkedWriter = (ChunkedArrayPoolBufferWriter<byte>)writer;
 
-        var task = new ValueTask<T>(Connection.StartInvokerOperation<T>(operationId), operationId.Id);
-        Connection.Dispatch(options, chunkedWriter, null);
+        var task = new ValueTask<T>(operation, operation.Token);
+        State.Connection.Dispatch(options, chunkedWriter, null);
         return task;
     }
 
-    internal protected ValueTask CompleteVoidCall(IBufferWriter<byte> writer, MessageOptions options, OperationId operationId, CancellationToken cancellationToken)
+    internal protected ValueTask CompleteVoidCall(IBufferWriter<byte> writer, MessageOptions options, VoidInvokerOperation operation, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var chunkedWriter = (ChunkedArrayPoolBufferWriter<byte>)writer;
 
-        var task = new ValueTask(Connection.StartVoidInvokerOperation(operationId), operationId.Id);
-        Connection.Dispatch(options, chunkedWriter, null);
+        var task = new ValueTask(operation, operation.Token);
+        State.Connection.Dispatch(options, chunkedWriter, null);
         return task;
     }
 
@@ -90,15 +110,5 @@ internal abstract class InvokerBase
         {
             task.AsTask().GetAwaiter().GetResult();
         }
-    }
-
-    internal protected static T SynchronousWaitResult<T>(Task<T> task)
-    {
-        return task.GetAwaiter().GetResult();
-    }
-
-    internal protected static void SynchronousWaitVoidResult(Task task)
-    {
-        task.GetAwaiter().GetResult();
     }
 }

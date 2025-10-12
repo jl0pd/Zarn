@@ -9,11 +9,9 @@ internal delegate void SetToken<T>(ref ManualResetValueTaskSourceCore<T> source,
 
 internal abstract class InvokerOperation
 {
-    public abstract OperationId Id { get; set; }
+    public abstract short Token { get; set; }
 
     public ConnectionContext? Context { get; set; }
-
-    public abstract Type ReturnType { get; }
 
     public abstract void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody);
 
@@ -42,19 +40,12 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
     private static readonly SetToken<T> s_setToken = GetSetTokenDelegate<T>();
 
     private ManualResetValueTaskSourceCore<T> _tcs;
-    private OperationId _operationId;
-
-    public override OperationId Id
+    
+    public override short Token
     {
-        get => _operationId;
-        set
-        {
-            _operationId = value;
-            s_setToken.Invoke(ref _tcs, value.Id);
-        }
+        get => _tcs.Version;
+        set => s_setToken.Invoke(ref _tcs, value);
     }
-
-    public override Type ReturnType => typeof(T);
 
     public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
     {
@@ -99,19 +90,12 @@ internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
     private static readonly SetToken<object?> s_setToken = GetSetTokenDelegate<object?>();
 
     private ManualResetValueTaskSourceCore<object?> _tcs;
-    private OperationId _operationId;
 
-    public override OperationId Id
+    public override short Token
     {
-        get => _operationId;
-        set
-        {
-            _operationId = value;
-            s_setToken.Invoke(ref _tcs, value.Id);
-        }
+        get => _tcs.Version;
+        set => s_setToken.Invoke(ref _tcs, value);
     }
-
-    public override Type ReturnType => typeof(void);
 
     public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
     {

@@ -16,10 +16,10 @@ internal sealed class ConnectionContext
     private readonly Stream _stream;
     private readonly MessageOptions _commonOptions;
     private readonly IServiceProvider _calleeServices;
-    private readonly ConcurrentDictionary<OperationId, InvokerOperation> _invokerOperations = new();
     private readonly ConcurrentDictionary<OperationId, CalleeBase> _calleeOperations = new();
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncManualResetEvent _outputMessagesEvent = new();
+    private readonly ConcurrentDictionary<Guid, InvokerState> _invokers = new();
 
     public Pools Pools { get; }
 
@@ -64,9 +64,14 @@ internal sealed class ConnectionContext
         {
             invoker = factories[typeSlot].GetInvoker();
         }
-        invoker.Connection = this;
         invoker.TypeSlot = typeSlot + 1;
-        invoker.Id = OperationId.GenObjectId();
+        invoker.State = new InvokerState(OperationId.GenObjectId(), this);
+        _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
+        {
+            const string message = "Multiple invokers with same id may not exist";
+            Debug.Fail(message);
+            throw new InvalidOperationException(message);
+        });
 
         return invoker;
     }
@@ -274,47 +279,22 @@ internal sealed class ConnectionContext
 
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
-        var op = _invokerOperations.Remove(opId);
+        var invoker = _invokers[opId.Target];
 
         var options = (MessageOptions)message.FirstChunkRequired.Array[0];
         if (options.HasFlag(MessageOptions.Success))
         {
-            op.Complete(SerializationContext, ref reader);
+            invoker.Complete(opId.Id, ref reader);
         }
         else
         {
             var ex = SerializationContext.Deserialize<Exception>(ref reader);
-            op.Complete(ex);
+            invoker.Complete(opId.Id, ex);
         }
 
+        Debug.Assert(reader.Remaining.IsEmpty);
+
         Pools.Return(message);
-    }
-
-    public InvokerOperation<T> StartInvokerOperation<T>(OperationId operationId)
-    {
-        var operation = Pools.GetInvokerOperation<T>();
-        operation.Id = operationId;
-        RegisterInvokerOperation(operation, operationId);
-        return operation;
-    }
-
-    public VoidInvokerOperation StartVoidInvokerOperation(OperationId operationId)
-    {
-        var operation = Pools.GetInvokerOperation();
-        RegisterInvokerOperation(operation, operationId);
-        return operation;
-    }
-
-    private void RegisterInvokerOperation(InvokerOperation operation, OperationId operationId)
-    {
-        operation.Context = this;
-        operation.Id = operationId;
-        _invokerOperations.AddOrUpdate(operationId, operation, (k, v) =>
-        {
-            string message = "Operation with same Id cannot be registered";
-            Debug.Fail(message);
-            throw new InvalidOperationException(message);
-        });
     }
 
     public void Dispatch(MessageOptions options, ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
