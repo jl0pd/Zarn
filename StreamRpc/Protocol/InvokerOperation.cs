@@ -19,8 +19,6 @@ internal abstract class InvokerOperation
 
     public abstract void Complete(Exception e);
 
-    public abstract void Reset();
-
     protected static SetToken<T> GetSetTokenDelegate<T>()
     {
         var sourceType = typeof(ManualResetValueTaskSourceCore<T>);
@@ -58,8 +56,6 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
 
     public override Type ReturnType => typeof(T);
 
-    public override void Reset() => _tcs = default;
-
     public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
     {
         var result = serializationContext.Deserialize<T>(ref responseBody);
@@ -80,8 +76,10 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
         }
         finally
         {
-            Reset();
-            Context?.Pools.Return(this);
+            _tcs = default;
+            var pools = Context?.Pools;
+            Context = null;
+            pools?.Return(this);
         }
     }
 
@@ -115,8 +113,6 @@ internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
 
     public override Type ReturnType => typeof(void);
 
-    public override void Reset() => _tcs = default;
-
     public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
     {
         _tcs.SetResult(null);
@@ -135,8 +131,10 @@ internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
         }
         finally
         {
-            Reset();
-            Context?.Pools.Return(this);
+            _tcs = default;
+            var pools = Context?.Pools;
+            Context = null;
+            pools?.Return(this);
         }
     }
 

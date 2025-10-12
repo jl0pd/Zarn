@@ -66,15 +66,16 @@ internal static class InvokerImplementer
         ImplementerCommon.DefineCtor(typeBuilder, InvokerBase_ctor);
         ImplementerCommon.DefineImplementedInterfaceProp(typeBuilder, interfaceType);
 
-        foreach (var method in interfaceType.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+        var methods = interfaceType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
+        for (int i = 0; i < methods.Length; i++)
         {
-            ImplementMethod(typeBuilder, method);
+            ImplementMethod(typeBuilder, methods[i], i);
         }
 
         return typeBuilder.CreateType();
     }
 
-    private static void ImplementMethod(TypeBuilder typeBuilder, MethodInfo interfaceMethod)
+    private static void ImplementMethod(TypeBuilder typeBuilder, MethodInfo interfaceMethod, int methodIndex)
     {
         var method = typeBuilder.DefineMethod(
                 interfaceMethod.Name,
@@ -82,6 +83,8 @@ internal static class InvokerImplementer
                 CallingConventions.HasThis,
                 interfaceMethod.ReturnType,
                 interfaceMethod.GetParameters().Select(p => p.ParameterType).ToArray());
+
+        var methodInfoField = typeBuilder.DefineField("_methodInfo#" + methodIndex, typeof(MethodInfo), FieldAttributes.Private);
 
         var returnValueType = ImplementerCommon.GetValueType(interfaceMethod.ReturnType);
 
@@ -116,12 +119,27 @@ internal static class InvokerImplementer
             throw new NotImplementedException();
         }
 
-        // base.SerializationContext.Serialize(base.GetMethodSlot(methodof(interfaceMethod)), bufferWriter);
+        // base.SerializationContext.Serialize(base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod)), bufferWriter);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, InvokerBase_Get_SerializationContext);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, interfaceMethod);
-        il.Emit(OpCodes.Call, ImplementerCommon.MethodBase_GetMethodFromHandle);
+        {
+            var ifNotNull = il.DefineLabel();
+            
+            // _methodInfo ??= methodof(interfaceMethod)
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, methodInfoField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, ifNotNull);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, interfaceMethod);
+            il.Emit(OpCodes.Call, ImplementerCommon.MethodBase_GetMethodFromHandle);
+            il.Emit(OpCodes.Stfld, methodInfoField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, methodInfoField);
+            il.MarkLabel(ifNotNull);
+        }
         il.Emit(OpCodes.Call, InvokerBase_GetMethodSlot);
         il.Emit(OpCodes.Ldloc, bufferWriterLocal);
         il.Emit(OpCodes.Call, SerializationContext_SerializeT.MakeGenericMethod(typeof(int)));

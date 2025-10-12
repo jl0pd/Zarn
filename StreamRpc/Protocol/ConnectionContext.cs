@@ -112,8 +112,8 @@ internal sealed class ConnectionContext
 
     private void HandleMessage(ChunkedArrayPoolBufferWriter<byte> message)
     {
-        Debug.Assert(((MessageOptions)message.FirstChunk.Array[0] & MessageOptions.ReservedMask) == 0);
-        var type = (MessageType)message.FirstChunk.Array[1];
+        Debug.Assert(((MessageOptions)message.FirstChunkRequired.Array[0] & MessageOptions.ReservedMask) == 0);
+        var type = (MessageType)message.FirstChunkRequired.Array[1];
         switch (type)
         {
             case MessageType.ExecuteRequest:
@@ -206,7 +206,7 @@ internal sealed class ConnectionContext
 
         var op = _invokerOperations.Remove(opId);
 
-        var options = (MessageOptions)message.FirstChunk.Array[0];
+        var options = (MessageOptions)message.FirstChunkRequired.Array[0];
         if (options.HasFlag(MessageOptions.Success))
         {
             op.Complete(SerializationContext, ref reader);
@@ -216,27 +216,30 @@ internal sealed class ConnectionContext
             var ex = SerializationContext.Deserialize<Exception>(ref reader);
             op.Complete(ex);
         }
+
+        Pools.Return(message);
     }
 
     public InvokerOperation<T> StartInvokerOperation<T>(OperationId operationId)
     {
         var operation = Pools.GetInvokerOperation<T>();
         operation.Id = operationId;
-        RegisterInvokerOperation(operation);
+        RegisterInvokerOperation(operation, operationId);
         return operation;
     }
 
     public VoidInvokerOperation StartVoidInvokerOperation(OperationId operationId)
     {
         var operation = Pools.GetInvokerOperation();
-        operation.Id = operationId;
-        RegisterInvokerOperation(operation);
+        RegisterInvokerOperation(operation, operationId);
         return operation;
     }
 
-    private void RegisterInvokerOperation(InvokerOperation operation)
+    private void RegisterInvokerOperation(InvokerOperation operation, OperationId operationId)
     {
-        _invokerOperations.AddOrUpdate(operation.Id, operation, (k, v) =>
+        operation.Context = this;
+        operation.Id = operationId;
+        _invokerOperations.AddOrUpdate(operationId, operation, (k, v) =>
         {
             string message = "Operation with same Id cannot be registered";
             Debug.Fail(message);

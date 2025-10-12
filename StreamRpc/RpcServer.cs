@@ -69,7 +69,6 @@ public sealed class RpcServer : IAsyncDisposable
         .ContinueWith(
             x =>
             {
-                Stop();
                 ExceptionOccurred?.Invoke(this, new ThreadExceptionEventArgs(x.Exception!));
             },
             TaskContinuationOptions.OnlyOnFaulted);
