@@ -8,6 +8,8 @@ public static class Program
 {
     public static async Task Main()
     {
+        ThreadPool.GetMinThreads(out _, out int completionPortThreads);
+        ThreadPool.SetMinThreads(Environment.ProcessorCount, completionPortThreads);
         await Task.Delay(1000);
 
         await RunConnectToServerTest<IAdder, Adder>(async adder =>
@@ -19,11 +21,16 @@ public static class Program
 
             await Task.Delay(1000);
 
+            const int count = 100_000;
+            var list = new List<Task>(count);
             var sw = Stopwatch.StartNew();
-            for (int i = 0; i < 100_000; i++)
+            for (int i = 0; i < count; i++)
             {
                 await adder.AddValueAsync(40, 2);
+                //list.Add(adder.AddValueAsync(40, 2).AsTask());
             }
+
+            //await Task.WhenAll(list);
             Console.WriteLine(sw.Elapsed.TotalMilliseconds);
         });
     }
@@ -46,7 +53,7 @@ public static class Program
 
         server.ConfigureServices(services =>
         {
-            services.AddTransient<TInterface, TImpl>();
+            services.AddScoped<TInterface, TImpl>();
             services.AllowRemoteConnection<TInterface>();
         });
 

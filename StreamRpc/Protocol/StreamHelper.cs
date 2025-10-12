@@ -3,6 +3,9 @@ using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
+// Note: methods from this class are manually inlined into ConnectionContext to remove
+// allocations of StateMachineBox, caused by asynchronous completion of method.
+// If method is updated here, it must be updated inside ConnectionContext and vise-versa
 internal static class StreamHelper
 {
     public static ValueTask Send(Stream stream,
@@ -67,15 +70,33 @@ internal static class StreamHelper
         var headerLength = PackedInt.GetConsumedBytes(initialBuffer[0]);
         if (headerLength > 1)
         {
-            await stream.ReadExactlyAsync(initialBuffer.AsMemory(1, headerLength - 1), cancellationToken);
-            bytesRead += headerLength - 1;
+            while (bytesRead < headerLength)
+            {
+                var read = await stream.ReadAsync(initialBuffer.AsMemory(bytesRead, headerLength - bytesRead), cancellationToken);
+                if (read == 0)
+                {
+                    return false;
+                }
+                bytesRead += read;
+            }
         }
 
         var messageLength = (int)PackedInt.Read(initialBuffer, out _);
 
-        var message = writer.GetMemory(messageLength - headerLength);
-        await stream.ReadExactlyAsync(message[..(messageLength - headerLength)], cancellationToken);
-        writer.Advance(messageLength - headerLength);
+        var payloadLength = messageLength - headerLength;
+        var message = writer.GetMemory(payloadLength);
+        bytesRead = 0;
+        while (bytesRead < payloadLength)
+        {
+            var read = await stream.ReadAsync(message[bytesRead..payloadLength], cancellationToken);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            bytesRead += read;
+        }
+        writer.Advance(payloadLength);
 
         return true;
     }

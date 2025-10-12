@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Threading.Channels;
 using StreamRpc.Serialization;
+using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
 
@@ -13,17 +13,13 @@ internal sealed class ConnectionContext
                                         ChunkedArrayPoolBufferWriter<byte> Header,
                                         ChunkedArrayPoolBufferWriter<byte>? Body);
 
-    private readonly Channel<OutputMessage> _outputChannel = Channel.CreateUnbounded<OutputMessage>(new UnboundedChannelOptions
-    {
-        SingleReader = true,
-        SingleWriter = false,
-    });
-
     private readonly Stream _stream;
     private readonly MessageOptions _commonOptions;
     private readonly IServiceProvider _calleeServices;
     private readonly ConcurrentDictionary<OperationId, InvokerOperation> _invokerOperations = new();
     private readonly ConcurrentDictionary<OperationId, CalleeBase> _calleeOperations = new();
+    private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
+    private readonly AsyncManualResetEvent _outputMessagesEvent = new();
 
     public Pools Pools { get; }
 
@@ -77,21 +73,59 @@ internal sealed class ConnectionContext
 
     public async Task SendMessages(CancellationToken cancellationToken)
     {
-        await foreach (var msg in _outputChannel.Reader.ReadAllAsync(cancellationToken).WithCancellation(cancellationToken))
-        {
-            if (_commonOptions.HasFlag(MessageOptions.Compressed))
-            {
-                throw new NotImplementedException();
-            }
-            await StreamHelper.Send(_stream,
-                                    msg.Length,
-                                    msg.Options | _commonOptions | MessageOptions.LastChunk,
-                                    msg.Header,
-                                    msg.Body,
-                                    cancellationToken);
+        Debug.Assert(cancellationToken.CanBeCanceled);
 
-            Pools.Return(msg.Header);
-            Pools.Return(msg.Body);
+        using var _ = cancellationToken.UnsafeRegister(
+                        static state => ((AsyncManualResetEvent?)state)?.Set(),
+                        _outputMessagesEvent);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await _outputMessagesEvent.WaitAsync();
+            _outputMessagesEvent.Reset();
+
+            while (_outputMessages.TryDequeue(out var msg))
+            {
+                if (_commonOptions.HasFlag(MessageOptions.Compressed))
+                {
+                    throw new NotImplementedException();
+                }
+
+                int chunkId = 0;
+                foreach (var chunk in msg.Header)
+                {
+                    ReadOnlyMemory<byte> memoryToWrite;
+                    if (chunkId == 0)
+                    {
+                        int msgBytesLength = PackedInt.GetRequiredSize(msg.Length - PackedInt.MaxSize);
+                        int skipBytes = PackedInt.MaxSize - msgBytesLength;
+                        int written = PackedInt.Write(msg.Length - skipBytes, chunk.Array.AsSpan(skipBytes));
+                        Debug.Assert(written == msgBytesLength);
+
+                        chunk.Array[PackedInt.MaxSize] = (byte)(msg.Options | _commonOptions | MessageOptions.LastChunk);
+                        memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
+                    }
+                    else
+                    {
+                        memoryToWrite = chunk.WrittenMemory;
+                    }
+
+                    await _stream.WriteAsync(memoryToWrite, cancellationToken);
+
+                    chunkId++;
+                }
+
+                if (msg.Body is { })
+                {
+                    foreach (var chunk in msg.Body)
+                    {
+                        await _stream.WriteAsync(chunk.WrittenMemory, cancellationToken);
+                    }
+                }
+
+                Pools.Return(msg.Header);
+                Pools.Return(msg.Body);
+            }
         }
     }
 
@@ -101,11 +135,47 @@ internal sealed class ConnectionContext
         while (!cancellationToken.IsCancellationRequested)
         {
             var writer = Pools.GetWriter();
-            if (!await StreamHelper.Read(_stream, initialBuffer, writer, cancellationToken))
+
+            int bytesRead = await _stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
+            if (bytesRead == 0)
             {
                 Pools.Return(writer);
                 return;
             }
+
+            var headerLength = PackedInt.GetConsumedBytes(initialBuffer[0]);
+            if (headerLength > 1)
+            {
+                while (bytesRead < headerLength)
+                {
+                    var read = await _stream.ReadAsync(initialBuffer.AsMemory(bytesRead, headerLength - bytesRead), cancellationToken);
+                    if (read == 0)
+                    {
+                        Pools.Return(writer);
+                        return;
+                    }
+                    bytesRead += read;
+                }
+            }
+
+            var messageLength = (int)PackedInt.Read(initialBuffer, out _);
+
+            var payloadLength = messageLength - headerLength;
+            var message = writer.GetMemory(payloadLength);
+            bytesRead = 0;
+            while (bytesRead < payloadLength)
+            {
+                var read = await _stream.ReadAsync(message[bytesRead..payloadLength], cancellationToken);
+                if (read == 0)
+                {
+                    Pools.Return(writer);
+                    return;
+                }
+
+                bytesRead += read;
+            }
+            writer.Advance(payloadLength);
+
             HandleMessage(writer);
         }
     }
@@ -255,8 +325,8 @@ internal sealed class ConnectionContext
             length += body.TotalLength;
         }
 
-        bool success = _outputChannel.Writer.TryWrite(new OutputMessage(options, checked((int)length), header, body));
-        Debug.Assert(success, "Write to unbounded channel should always succeed");
+        _outputMessages.Enqueue(new OutputMessage(options, checked((int)length), header, body));
+        _outputMessagesEvent.Set();
     }
 
     public void CompleteResponse(CalleeBase callee, Exception? exception, ChunkedArrayPoolBufferWriter<byte>? returnValue)

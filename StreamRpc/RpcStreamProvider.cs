@@ -6,7 +6,7 @@ namespace StreamRpc;
 
 public abstract class RpcStreamProvider : IAsyncDisposable
 {
-    public abstract ValueTask<Stream> OpenStreamAsync(CancellationToken cancellationToken);
+    public abstract ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken);
 
     public virtual ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
@@ -19,34 +19,22 @@ public abstract class RpcStreamProvider : IAsyncDisposable
     public static RpcStreamProvider FromListenPort(IPEndPoint endpoint)
         => new ListenPort(endpoint);
 
-    private static InvalidOperationException GetStreamWasRetrieved()
-        => new("Stream was already retrieved from this instance");
-
     private sealed class Singleton(Stream? stream) : RpcStreamProvider
     {
-        public override ValueTask<Stream> OpenStreamAsync(CancellationToken cancellationToken)
+        public override ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return ValueTask.FromCanceled<Stream>(cancellationToken);
+                return ValueTask.FromCanceled<Stream?>(cancellationToken);
             }
 
-            if (Interlocked.Exchange(ref stream, null) is { } s)
-            {
-                return ValueTask.FromResult(s);
-            }
-            else
-            {
-                var ex = GetStreamWasRetrieved();
-                ExceptionDispatchInfo.SetCurrentStackTrace(ex);
-                return ValueTask.FromException<Stream>(ex);
-            }
+            return ValueTask.FromResult<Stream?>(Interlocked.Exchange(ref stream, null));
         }
     }
 
     private sealed class ClientTcp(IPEndPoint? endpoint) : RpcStreamProvider
     {
-        public override async ValueTask<Stream> OpenStreamAsync(CancellationToken cancellationToken)
+        public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
             if (Interlocked.Exchange(ref endpoint, null) is { } ep)
             {
@@ -62,10 +50,8 @@ public abstract class RpcStreamProvider : IAsyncDisposable
                     throw;
                 }
             }
-            else
-            {
-                throw GetStreamWasRetrieved();
-            }
+
+            return null;
         }
     }
 
@@ -78,7 +64,7 @@ public abstract class RpcStreamProvider : IAsyncDisposable
             _listener = new TcpListener(endpoint);
         }
 
-        public override async ValueTask<Stream> OpenStreamAsync(CancellationToken cancellationToken)
+        public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
             var listener = _listener;
             ObjectDisposedException.ThrowIf(listener is null, this);
