@@ -270,6 +270,11 @@ internal sealed class ConnectionContext
         callee.Impl = _calleeServices.GetService(calleeType) ?? throw new InvalidOperationException();
         callee.ArgumentsReader = reader;
         callee.Cts = Pools.GetCts();
+        _calleeOperations.AddOrUpdate(operationId, callee, (k, v) =>
+        {
+            Debug.Fail(null);
+            throw ThrowHelper.Unreachable;
+        });
 
         ThreadPool.UnsafeQueueUserWorkItem(callee, false);
     }

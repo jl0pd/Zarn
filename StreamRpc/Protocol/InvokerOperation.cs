@@ -138,7 +138,13 @@ internal abstract class InvokerOperation
 
     private void Cancel()
     {
-        Complete(new OperationCanceledException(CancellationToken));
+        Debug.Assert(Connection is { } && SerializationContext is { } && Invoker is { });
+        var writer = Connection.Pools.GetWriter();
+        writer.Reserve(PackedInt.MaxSize);
+        SerializationContext.Serialize(MessageOptions.None, writer);
+        SerializationContext.Serialize(MessageType.ExecuteCancel, writer);
+        SerializationContext.Serialize(new OperationId(Invoker.Id, Token), writer);
+        Connection.Dispatch(MessageOptions.None, writer, null);
     }
 }
 

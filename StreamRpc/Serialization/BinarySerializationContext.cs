@@ -19,6 +19,7 @@ public sealed class BinarySerializationContext
         [typeof(bool)] = BoolBinarySerializer.Instance,
         [typeof(string)] = StringBinarySerializer.Instance,
         [typeof(byte[])] = ByteArrayBinarySerializer.Instance,
+        [typeof(CancellationToken)] = CancellationTokenBinarySerializer.Instance,
         [typeof(ReadOnlyMemory<byte>)] = ByteReadOnlyMemoryBinarySerializer.Instance,
     };
 

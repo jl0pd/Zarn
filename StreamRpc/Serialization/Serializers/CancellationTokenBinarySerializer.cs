@@ -4,6 +4,8 @@ namespace StreamRpc.Serialization.Serializers;
 
 internal sealed class CancellationTokenBinarySerializer : BinarySerializer<CancellationToken>
 {
+    public static CancellationTokenBinarySerializer Instance { get; } = new();
+
     public override CancellationToken Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
     {
         return new CancellationToken(context.Deserialize<bool>(ref source));

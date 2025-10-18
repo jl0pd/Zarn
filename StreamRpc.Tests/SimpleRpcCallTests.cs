@@ -47,6 +47,23 @@ public sealed class SimpleRpcCallTests : RpcTestsBase
     });
 
     [Fact]
+    public Task PassCancelledToken() => RunConnectToServerTest<ICancellationFunctions, CancellationFunctions>(async (inst) =>
+    {
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await inst.CountUntilCancelled(new CancellationToken(true));
+        });
+    });
+
+    [Fact]
+    public Task CancelTokenAfterSomeTime() => RunConnectToServerTest<ICancellationFunctions, CancellationFunctions>(async (inst) =>
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.2));
+        var result = await inst.CountUntilCancelled(cts.Token);
+        Assert.NotEqual(0, result);
+    });
+
+    [Fact]
     public Task SyncReturn() => RunConnectToServerTest<IGreeter, Greeter>(async (inst) =>
     {
         Assert.Equal("Hello, John", inst.GetGreeting("John"));
