@@ -7,7 +7,7 @@ namespace StreamRpc.Protocol;
 [StructLayout(LayoutKind.Explicit, Size = Size)]
 internal readonly struct OperationId : IEquatable<OperationId>
 {
-    private const int Size = 16;
+    public const int Size = 16;
 
     [FieldOffset(0)]
     private readonly byte _firstByte;

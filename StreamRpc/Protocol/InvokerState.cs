@@ -1,56 +1,83 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class InvokerState(Guid id, ConnectionContext context)
+internal sealed class InvokerState(Guid id, ConnectionContext context, int maxConcurrentOperations, SemaphoreSlim semaphore)
 {
     public Guid Id { get; } = id;
 
     public ConnectionContext Connection { get; } = context;
 
-    private readonly ConcurrentDictionary<short, InvokerOperation> _operations = [];
-    private int _lastOpId;
+    private int _allocated = 0;
+    private readonly short[] _operationIds = new short[maxConcurrentOperations];
+    private readonly InvokerOperation?[] _operations = new InvokerOperation[maxConcurrentOperations];
+    private short _lastOpId;
+    private readonly Lock _lock = new();
 
     public void Complete(short opId, Exception exception)
     {
-        _operations.Remove(opId).Complete(exception);
+        Remove(opId).Complete(exception);
     }
 
     public void Complete(short opId, ref ReadOnlySequenceReader<byte> reader)
     {
-        _operations.Remove(opId).Complete(Connection.SerializationContext, ref reader);
+        Remove(opId).Complete(ref reader);
     }
 
-    public InvokerOperation GetOperation(short id)
+    private InvokerOperation Remove(short opId)
     {
-        return _operations[id];
+        InvokerOperation? op = null;
+        using (_lock.EnterScope())
+        {
+            var ops = _operations;
+            for (int i = 0; i < ops.Length; i++)
+            {
+                op = ops[i];
+                if (op is { } && op.Token == opId)
+                {
+                    ops[i] = null;
+                    _allocated--;
+                    break;
+                }
+            }
+        }
+
+        Debug.Assert(op is { });
+        semaphore.Release();
+        return op;
     }
 
     public InvokerOperation<T> CreateOperation<T>()
     {
-        var op = Connection.Pools.GetInvokerOperation<T>();
-        RegisterOperation(op);
-        return op;
+        return Connection.Pools.GetInvokerOperation<T>();
     }
 
     public VoidInvokerOperation CreateOperation()
     {
-        var op = Connection.Pools.GetInvokerOperation();
-        RegisterOperation(op);
-        return op;
+        return Connection.Pools.GetInvokerOperation();
     }
 
-    private void RegisterOperation(InvokerOperation operation)
+    public Task WaitForFreeOperationSlot(CancellationToken cancellationToken)
     {
-        var token = unchecked((short)Interlocked.Increment(ref _lastOpId));
-        operation.Token = token;
-        _operations.AddOrUpdate(token, operation, (key, value) =>
+        return semaphore.WaitAsync(cancellationToken);
+    }
+
+    public void RegisterOperation(InvokerOperation operation)
+    {
+        using (_lock.EnterScope()) // spinlock most likely would be wasteful here. Lock.Enter does spin-waiting when needed
         {
-            const string message = "Multiple operations with same id may not exist";
-            Debug.Fail(message);
-            throw new InvalidOperationException(message);
-        });
+            _lastOpId++;
+            while (Array.IndexOf(_operationIds, _lastOpId, 0, _allocated) >= 0)
+            {
+                _lastOpId++;
+            }
+
+            int freeSlot = Array.IndexOf(_operations, null);
+            Debug.Assert(freeSlot >= 0);
+            operation.Token = _lastOpId;
+            _operations[freeSlot] = operation;
+            _allocated++;
+        }
     }
 }

@@ -1,60 +1,166 @@
-using System.Reflection;
-using System.Reflection.Emit;
+using System.Diagnostics;
+using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks.Sources;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
-internal delegate void SetToken<T>(ref ManualResetValueTaskSourceCore<T> source, short token);
-
 internal abstract class InvokerOperation
 {
-    public abstract short Token { get; set; }
+    // this token is not associate in any way with `IValueTaskCompletionSource.GetResult(short token)`
+    public short Token { get; set; }
 
-    public ConnectionContext? Context { get; set; }
+    public InvokerState? Invoker { get; set; }
 
-    public abstract void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody);
+    public ConnectionContext? Connection => Invoker?.Connection;
 
-    public abstract void Complete(Exception e);
+    protected BinarySerializationContext? SerializationContext { get; private set; }
 
-    protected static SetToken<T> GetSetTokenDelegate<T>()
+    public CancellationToken CancellationToken { get; set; }
+
+    private CancellationTokenRegistration _cancellationTokenRegistration;
+
+    public ChunkedArrayPoolBufferWriter<byte>? RequestWriter { get; set; }
+
+    public MessageOptions RequestOptions { get; set; }
+
+    private int _isResultSet = 0;
+
+    private Task? _waitForFreeOperationSlot;
+    private Action? _startCoreAction;
+
+    public Pools? Reset()
     {
-        var sourceType = typeof(ManualResetValueTaskSourceCore<T>);
-        var field = sourceType.GetField("_version", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException("Cannot find ManualResetValueTaskSourceCore`1._version field");
+        _cancellationTokenRegistration.Dispose();
+        _cancellationTokenRegistration = default;
+        _isResultSet = 0;
+        var pools = Invoker?.Connection.Pools;
+        Invoker = null;
+        return pools;
+    }
 
-        var method = new DynamicMethod("SetToken", typeof(void), [sourceType.MakeByRefType(), typeof(short)], true);
+    public void Prepare()
+    {
+        Debug.Assert(Connection is { });
+        SerializationContext = Connection.SerializationContext;
+        var writer = Connection.Pools.GetWriter();
+        writer.Reserve(PackedInt.MaxSize);
+        SerializationContext.Serialize(MessageOptions.None, writer);
+        SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
+        writer.Reserve(OperationId.Size);
+        RequestWriter = writer;
+    }
 
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, field);
-        il.Emit(OpCodes.Ret);
+    public void SerializeArg<T>(T value)
+    {
+        Debug.Assert(SerializationContext is { } && RequestWriter is { });
 
-        return method.CreateDelegate<SetToken<T>>();
+        SerializationContext.Serialize(value, RequestWriter);
+    }
+
+    protected void StartCommon()
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
+
+        var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
+
+        if (waitTask.IsCompleted)
+        {
+            waitTask.GetAwaiter().GetResult(); // throw exception is there's any
+            StartCore();
+        }
+        else
+        {
+            _waitForFreeOperationSlot = waitTask;
+            waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+        }
+    }
+
+    private void StartCore()
+    {
+        if (_waitForFreeOperationSlot is { } task)
+        {
+            _waitForFreeOperationSlot = null;
+            try
+            {
+                task.GetAwaiter().GetResult();
+            }
+            catch (Exception e)
+            {
+                var info = ExceptionDispatchInfo.Capture(e);
+                Complete(info.SourceException);
+                return;
+            }
+        }
+
+        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
+
+        Invoker.RegisterOperation(this);
+
+        var writer = RequestWriter;
+        RequestWriter = null;
+        var ar = writer.FirstChunkRequired.Array;
+        var opIdStart = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageOptions) + sizeof(MessageType));
+        MemoryMarshal.Write(opIdStart, new OperationId(Invoker.Id, Token));
+
+        if (CancellationToken.CanBeCanceled)
+        {
+            _cancellationTokenRegistration = CancellationToken.UnsafeRegister(static state =>
+            {
+                ((InvokerOperation?)state)?.Cancel();
+            }, this);
+        }
+
+        Connection.Dispatch(RequestOptions, writer, null);
+    }
+
+    public void Complete(ref ReadOnlySequenceReader<byte> responseBody)
+    {
+        if (Interlocked.CompareExchange(ref _isResultSet, 1, 0) == 0)
+        {
+            CompleteCore(ref responseBody);
+        }
+    }
+
+    protected abstract void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody);
+
+    public void Complete(Exception e)
+    {
+        if (Interlocked.CompareExchange(ref _isResultSet, 1, 0) == 0)
+        {
+            CompleteCore(e);
+        }
+    }
+
+    protected abstract void CompleteCore(Exception e);
+
+    private void Cancel()
+    {
+        Complete(new OperationCanceledException(CancellationToken));
     }
 }
 
 internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T>
 {
-    private static readonly SetToken<T> s_setToken = GetSetTokenDelegate<T>();
-
     private ManualResetValueTaskSourceCore<T> _tcs;
-    
-    public override short Token
+
+    public ValueTask<T> Start()
     {
-        get => _tcs.Version;
-        set => s_setToken.Invoke(ref _tcs, value);
+        StartCommon();
+        return new ValueTask<T>(this, _tcs.Version);
     }
 
-    public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
+    protected override void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody)
     {
-        var result = serializationContext.Deserialize<T>(ref responseBody);
+        Debug.Assert(SerializationContext is { });
+        var result = SerializationContext.Deserialize<T>(ref responseBody);
 
         _tcs.SetResult(result);
     }
 
-    public override void Complete(Exception e)
+    protected override void CompleteCore(Exception e)
     {
         _tcs.SetException(e);
     }
@@ -67,10 +173,8 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
         }
         finally
         {
-            _tcs = default;
-            var pools = Context?.Pools;
-            Context = null;
-            pools?.Return(this);
+            _tcs.Reset();
+            Reset()?.Return(this);
         }
     }
 
@@ -87,22 +191,20 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
 
 internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
 {
-    private static readonly SetToken<object?> s_setToken = GetSetTokenDelegate<object?>();
-
     private ManualResetValueTaskSourceCore<object?> _tcs;
 
-    public override short Token
+    public ValueTask Start()
     {
-        get => _tcs.Version;
-        set => s_setToken.Invoke(ref _tcs, value);
+        StartCommon();
+        return new ValueTask(this, _tcs.Version);
     }
 
-    public override void Complete(BinarySerializationContext serializationContext, ref ReadOnlySequenceReader<byte> responseBody)
+    protected override void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody)
     {
         _tcs.SetResult(null);
     }
 
-    public override void Complete(Exception e)
+    protected override void CompleteCore(Exception e)
     {
         _tcs.SetException(e);
     }
@@ -115,10 +217,8 @@ internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
         }
         finally
         {
-            _tcs = default;
-            var pools = Context?.Pools;
-            Context = null;
-            pools?.Return(this);
+            _tcs.Reset();
+            Reset()?.Return(this);
         }
     }
 
