@@ -14,7 +14,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal OperationId OperationId { get; set; }
 
-    internal BinarySerializationContext SerializationContext => Connection.SerializationContext;
+    internal BinarySerializationContext SerializationContext => Callees.SerializationContext;
 
     internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
 
@@ -23,7 +23,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     internal ChunkedArrayPoolBufferWriter<byte>? Writer { get; set; }
 
     internal CancellationTokenSource? Cts;
-    internal ConnectionContext Connection { get; set; } = null!;
+    internal CalleesState Callees { get; set; } = null!;
 
     internal int MethodSlot { get; set; }
 
@@ -48,7 +48,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         var value = SerializationContext.Deserialize<T>(ref ArgumentsReader);
         if (ArgumentsReader.Remaining.Length == 0)
         {
-            Connection.Pools.Return(Arguments);
+            Callees.Pools.Return(Arguments);
             Arguments = null;
         }
         if (typeof(T) == typeof(CancellationToken))
@@ -69,17 +69,17 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected void Fail(Exception e)
     {
-        Connection.CompleteResponse(this, e, null);
+        Callees.CompleteResponse(this, e, null);
     }
 
     internal protected IBufferWriter<byte> GetResponseWriter()
     {
-        return Writer = Connection.Pools.GetWriter();
+        return Writer = Callees.Pools.GetWriter();
     }
 
     internal protected void CompleteVoid()
     {
-        Connection.CompleteResponse(this, null, Writer);
+        Callees.CompleteResponse(this, null, Writer);
     }
 
     internal protected void Complete<T>(T value)
@@ -102,7 +102,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         }
         else
         {
-            var worker = Connection.Pools.GetOnCompletedWorker();
+            var worker = Callees.Pools.GetOnCompletedWorker();
             worker.Task = valueTask;
             worker.Callee = this;
             valueTask.GetAwaiter().OnCompleted(worker.OnCompleted);
@@ -155,7 +155,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         }
         else
         {
-            var worker = Connection.Pools.GetOnCompletedWorker<T>();
+            var worker = Callees.Pools.GetOnCompletedWorker<T>();
             worker.Task = valueTask;
             worker.Callee = this;
             valueTask.GetAwaiter().OnCompleted(worker.OnCompleted);

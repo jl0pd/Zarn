@@ -16,10 +16,10 @@ internal sealed class ConnectionContext
     private readonly Stream _stream;
     private readonly MessageOptions _commonOptions;
     private readonly IServiceProvider _calleeServices;
-    private readonly ConcurrentDictionary<OperationId, CalleeBase> _calleeOperations = new();
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
-    private readonly AsyncManualResetEvent _outputMessagesEvent = new();
+    private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
     private readonly ConcurrentDictionary<Guid, InvokerState> _invokers = new();
+    private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore = new(MaxConcurrentOperations, MaxConcurrentOperations);
     private const int MaxConcurrentOperations = 100; // TODO: allow to configure
 
@@ -33,6 +33,7 @@ internal sealed class ConnectionContext
         _calleeServices = services;
         Pools = pools;
         SerializationContext = pools.SerializationContext; // keep it closer
+        _callees = new CalleesState(this, MaxConcurrentOperations);
     }
 
     public InvokerBase GetInvoker(Type invokerType)
@@ -83,13 +84,12 @@ internal sealed class ConnectionContext
         Debug.Assert(cancellationToken.CanBeCanceled);
 
         using var _ = cancellationToken.UnsafeRegister(
-                        static state => ((AsyncManualResetEvent?)state)?.Set(),
+                        static state => ((AsyncAutoResetEvent?)state)?.Set(),
                         _outputMessagesEvent);
 
         while (!cancellationToken.IsCancellationRequested)
         {
             await _outputMessagesEvent.WaitAsync();
-            _outputMessagesEvent.Reset();
 
             while (_outputMessages.TryDequeue(out var msg))
             {
@@ -216,7 +216,7 @@ internal sealed class ConnectionContext
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
         // it's possible for cancellation to arrive after operation is already completed
-        if (_calleeOperations.TryGetValue(opId, out var op))
+        if (_callees.Find(opId) is { } op)
         {
             Interlocked.Exchange(ref op.Cts, null)?.Cancel();
         }
@@ -264,17 +264,20 @@ internal sealed class ConnectionContext
             callee.GenericMethodArgs = typeArgs;
         }
 
-        callee.Connection = this;
+        callee.Callees = _callees;
         callee.OperationId = operationId;
+        if (!_callees.Register(callee))
+        {
+            // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
+            // Currently this doesn't happen, and unlikely to happen in future, at least while people won't start
+            // implementing own libs to talk to this
+            Debug.Fail("not implemented");
+            throw new NotImplementedException();
+        }
         callee.Arguments = message;
         callee.Impl = _calleeServices.GetService(calleeType) ?? throw new InvalidOperationException();
         callee.ArgumentsReader = reader;
         callee.Cts = Pools.GetCts();
-        _calleeOperations.AddOrUpdate(operationId, callee, (k, v) =>
-        {
-            Debug.Fail(null);
-            throw ThrowHelper.Unreachable;
-        });
 
         ThreadPool.UnsafeQueueUserWorkItem(callee, false);
     }
@@ -314,30 +317,5 @@ internal sealed class ConnectionContext
 
         _outputMessages.Enqueue(new OutputMessage(options, checked((int)length), header, body));
         _outputMessagesEvent.Set();
-    }
-
-    public void CompleteResponse(CalleeBase callee, Exception? exception, ChunkedArrayPoolBufferWriter<byte>? returnValue)
-    {
-        var options = exception is null ? MessageOptions.Success : MessageOptions.None;
-        var header = Pools.GetWriter();
-
-        header.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(options, header);
-        SerializationContext.Serialize(MessageType.ExecuteResponse, header);
-        SerializationContext.Serialize(callee.OperationId, header);
-        if (exception is not null)
-        {
-            SerializationContext.Serialize(exception, header);
-        }
-
-        Dispatch(options, header, returnValue);
-
-        Pools.Return(Interlocked.Exchange(ref callee.Cts, null));
-
-        var @interface = callee.ImplementedInterface;
-        if (!@interface.IsGenericType)
-        {
-            Pools.CalleeFactoryLookup[@interface].Return(callee);
-        }
     }
 }

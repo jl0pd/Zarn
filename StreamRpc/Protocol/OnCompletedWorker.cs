@@ -19,7 +19,7 @@ internal sealed class VoidOnCompletedWorker : OnCompletedWorker
     {
         OnCompleted = () =>
         {
-            var pools = Callee?.Connection?.Pools;
+            var pools = Callee?.Callees?.Pools;
             Callee?.CompleteVoidTask(Task);
             Task = default;
             Callee = null;
@@ -36,7 +36,7 @@ internal sealed class OnCompletedWorker<T> : OnCompletedWorker
     {
         OnCompleted = () =>
         {
-            var pools = Callee?.Connection?.Pools;
+            var pools = Callee?.Callees?.Pools;
             Callee?.CompleteTask(Task);
             Task = default;
             Callee = null;
