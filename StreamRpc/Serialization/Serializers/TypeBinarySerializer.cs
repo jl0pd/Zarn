@@ -11,7 +11,7 @@ internal sealed class TypeBinarySerializer : BinarySerializer<Type?>
 
     public override void Serialize(Type? value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        context.Serialize(RemoveVersion(value?.AssemblyQualifiedName), writer);
+        StringBinarySerializer.Instance.Serialize(RemoveVersion(value?.AssemblyQualifiedName), writer, context);
     }
 
     [return: NotNullIfNotNull(nameof(typeName))]
@@ -48,7 +48,7 @@ internal sealed class TypeBinarySerializer : BinarySerializer<Type?>
 
     public override Type? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
     {
-        var name = context.Deserialize<string>(ref source);
+        var name = StringBinarySerializer.Instance.Deserialize(ref source, context);
         if (name is null)
         {
             return null;

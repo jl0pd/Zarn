@@ -12,7 +12,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
 
     public override string? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
     {
-        int length = context.Deserialize<int>(ref source);
+        int length = PackedIntBinarySerializer.Instance.Deserialize(ref source, context);
         if (length == -1)
         {
             return null;
@@ -38,11 +38,11 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
     {
         if (value is null)
         {
-            context.Serialize(-1, writer);
+            PackedIntBinarySerializer.Instance.Serialize(-1, writer, context);
         }
         else if (value == "")
         {
-            context.Serialize(0, writer);
+            PackedIntBinarySerializer.Instance.Serialize(0, writer, context);
         }
         else
         {
@@ -54,7 +54,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
                 bool success = Encoding.UTF8.TryGetBytes(value, bytes, out int written);
                 Debug.Assert(success, "We've rented enough bytes, there shouldn't be an error");
 
-                context.Serialize(written, writer);
+                PackedIntBinarySerializer.Instance.Serialize(written, writer, context);
                 bytes.AsSpan(0, written).CopyTo(writer.GetSpan(written));
                 writer.Advance(written);
             }

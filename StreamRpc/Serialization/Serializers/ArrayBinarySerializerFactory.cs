@@ -49,10 +49,6 @@ internal sealed class ArrayBinarySerializerFactory : BinarySerializerFactory
             {
                 context.Serialize(-1, writer);
             }
-            else if (value.Length == 0)
-            {
-                context.Serialize(0, writer);
-            }
             else
             {
                 context.Serialize(value.Length, writer);

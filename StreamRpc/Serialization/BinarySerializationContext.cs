@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using StreamRpc.Serialization.Serializers;
+using StreamRpc.Serialization.Serializers.Exceptions;
 
 namespace StreamRpc.Serialization;
 
@@ -10,17 +11,17 @@ public sealed class BinarySerializationContext
 {
     private readonly Dictionary<Type, BinarySerializer> _instances = new()
     {
-        [typeof(Type)] = TypeBinarySerializer.Instance,
-        [typeof(MethodInfo)] = MethodInfoBinarySerializer.Instance,
-        [typeof(byte)] = ByteBinarySerializer.Instance,
-        [typeof(short)] = PackedShortBinarySerializer.Instance,
-        [typeof(int)] = PackedIntBinarySerializer.Instance,
-        [typeof(long)] = PackedLongBinarySerializer.Instance,
-        [typeof(bool)] = BoolBinarySerializer.Instance,
-        [typeof(string)] = StringBinarySerializer.Instance,
-        [typeof(byte[])] = ByteArrayBinarySerializer.Instance,
-        [typeof(CancellationToken)] = CancellationTokenBinarySerializer.Instance,
-        [typeof(ReadOnlyMemory<byte>)] = ByteReadOnlyMemoryBinarySerializer.Instance,
+        { typeof(Type), TypeBinarySerializer.Instance },
+        { typeof(byte), ByteBinarySerializer.Instance },
+        { typeof(short), PackedShortBinarySerializer.Instance },
+        { typeof(int), PackedIntBinarySerializer.Instance },
+        { typeof(long), PackedLongBinarySerializer.Instance },
+        { typeof(bool), BoolBinarySerializer.Instance },
+        { typeof(string), StringBinarySerializer.Instance },
+        { typeof(byte[]), ByteArrayBinarySerializer.Instance },
+        { typeof(object[]), ObjectArrayBinarySerializer.Instance },
+        { typeof(CancellationToken), CancellationTokenBinarySerializer.Instance },
+        { typeof(ReadOnlyMemory<byte>), ByteReadOnlyMemoryBinarySerializer.Instance },
     };
 
     private readonly List<BinarySerializerFactory> _factories = 
@@ -29,6 +30,52 @@ public sealed class BinarySerializationContext
         UnmanagedBinarySerializerFactory.Instance,
         ArrayBinarySerializerFactory.Instance,
     ];
+
+    internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()
+    {
+        { typeof(Exception), ExceptionBinarySerializer.Instance },
+        { typeof(InvalidOperationException), InvalidOperationExceptionBinarySerializer.Instance },
+        { typeof(DivideByZeroException), DivideByZeroExceptionBinarySerializer.Instance },
+        { typeof(HttpIOException), HttpIOExceptionBinarySerializer.Instance },
+        { typeof(HttpProtocolException), HttpProtocolExceptionBinarySerializer.Instance },
+        { typeof(DriveNotFoundException), DriveNotFoundExceptionBinarySerializer.Instance },
+        { typeof(KeyNotFoundException), KeyNotFoundExceptionBinarySerializer.Instance },
+        { typeof(StackOverflowException), StackOverflowExceptionBinarySerializer.Instance },
+        { typeof(AccessViolationException), AccessViolationExceptionBinarySerializer.Instance },
+        { typeof(ArithmeticException), ArithmeticExceptionBinarySerializer.Instance },
+        { typeof(DirectoryNotFoundException), DirectoryNotFoundExceptionBinarySerializer.Instance },
+        { typeof(ApplicationException), ApplicationExceptionBinarySerializer.Instance },
+        { typeof(NotFiniteNumberException), NotFiniteNumberExceptionBinarySerializer.Instance },
+        { typeof(TaskCanceledException), TaskCanceledExceptionBinarySerializer.Instance },
+        { typeof(FormatException), FormatExceptionBinarySerializer.Instance },
+        { typeof(UriFormatException), UriFormatExceptionBinarySerializer.Instance },
+        { typeof(TimeoutException), TimeoutExceptionBinarySerializer.Instance },
+        { typeof(FileNotFoundException), FileNotFoundExceptionBinarySerializer.Instance },
+        { typeof(PlatformNotSupportedException), PlatformNotSupportedExceptionBinarySerializer.Instance },
+        { typeof(NotSupportedException), NotSupportedExceptionBinarySerializer.Instance },
+        { typeof(IndexOutOfRangeException), IndexOutOfRangeExceptionBinarySerializer.Instance },
+        { typeof(EndOfStreamException), EndOfStreamExceptionBinarySerializer.Instance },
+        { typeof(DataMisalignedException), DataMisalignedExceptionBinarySerializer.Instance },
+        { typeof(InvalidCastException), InvalidCastExceptionBinarySerializer.Instance },
+        { typeof(NotImplementedException), NotImplementedExceptionBinarySerializer.Instance },
+        { typeof(OverflowException), OverflowExceptionBinarySerializer.Instance },
+        { typeof(PathTooLongException), PathTooLongExceptionBinarySerializer.Instance },
+        { typeof(OperationCanceledException), OperationCanceledExceptionBinarySerializer.Instance },
+        { typeof(ObjectDisposedException), ObjectDisposedExceptionBinarySerializer.Instance },
+        { typeof(InvalidDataException), InvalidDataExceptionBinarySerializer.Instance },
+        { typeof(UnreachableException), UnreachableExceptionBinarySerializer.Instance },
+        { typeof(OutOfMemoryException), OutOfMemoryExceptionBinarySerializer.Instance },
+        { typeof(IOException), IOExceptionBinarySerializer.Instance },
+        { typeof(RankException), RankExceptionBinarySerializer.Instance },
+        { typeof(SemaphoreFullException), SemaphoreFullExceptionBinarySerializer.Instance },
+        { typeof(SystemException), SystemExceptionBinarySerializer.Instance },
+        { typeof(ArrayTypeMismatchException), ArrayTypeMismatchExceptionBinarySerializer.Instance },
+        { typeof(NullReferenceException), NullReferenceExceptionBinarySerializer.Instance },
+        { typeof(ArgumentException), ArgumentExceptionBinarySerializer.Instance },
+        { typeof(ArgumentNullException), ArgumentNullExceptionBinarySerializer.Instance },
+        { typeof(ArgumentOutOfRangeException), ArgumentOutOfRangeExceptionBinarySerializer.Instance },
+        { typeof(AggregateException), AggregateExceptionBinarySerializer.Instance },
+    };
 
     private readonly JsonBinarySerializerFactory _jsonFactory = new();
 
@@ -53,6 +100,15 @@ public sealed class BinarySerializationContext
 
                 var valueType = serializerType.GetGenericArguments()[0];
                 _instances.Add(valueType, serializer);
+            }
+        }
+
+        foreach (var exType in settings.TransparentExceptions)
+        {
+            if (ExceptionSerializers.TryGetValue(exType, out var serializer))
+            {
+                Debug.Assert(serializer is not BinarySerializerFactory);
+                _instances.TryAdd(exType, serializer);
             }
         }
     }
