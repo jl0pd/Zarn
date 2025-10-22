@@ -6,7 +6,7 @@ internal sealed class NotSupportedExceptionBinarySerializer : ExceptionSerialize
 {
     public static NotSupportedExceptionBinarySerializer Instance { get; } = new();
 
-    protected override NotSupportedException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override NotSupportedException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new NotSupportedException(message, innerException);
     }

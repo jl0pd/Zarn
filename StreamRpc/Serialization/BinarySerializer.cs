@@ -10,5 +10,5 @@ public abstract class BinarySerializer
 
     public abstract void Serialize(object? value, Type type, IBufferWriter<byte> writer, BinarySerializationContext context);
 
-    public abstract object? Deserialize(Type type, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context);
+    public abstract object? Deserialize(Type type, ref SequenceReader<byte> source, BinarySerializationContext context);
 }

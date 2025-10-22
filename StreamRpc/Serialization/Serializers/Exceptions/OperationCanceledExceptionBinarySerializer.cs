@@ -6,7 +6,7 @@ internal sealed class OperationCanceledExceptionBinarySerializer : ExceptionSeri
 {
     public static OperationCanceledExceptionBinarySerializer Instance { get; } = new();
 
-    protected override OperationCanceledException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override OperationCanceledException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new OperationCanceledException(message, innerException);
     }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using StreamRpc.Serialization;
 
@@ -17,7 +18,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
 
-    internal ReadOnlySequenceReader<byte> ArgumentsReader;
+    internal long ReaderOffset { get; set; }
 
     internal CancellationTokenSource? Cts;
     internal CalleesState Callees { get; set; } = null!;
@@ -30,7 +31,10 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     {
         try
         {
-            DispatchCore(MethodSlot - 1);
+            Debug.Assert(Arguments is { });
+            var reader = Arguments.GetReader();
+            reader.Advance(ReaderOffset);
+            DispatchCore(ref reader, MethodSlot - 1);
         }
         catch (Exception ex)
         {
@@ -38,12 +42,12 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         }
     }
 
-    internal protected abstract void DispatchCore(int methodSlot);
+    internal protected abstract void DispatchCore(ref SequenceReader<byte> argumentsReader, int methodSlot);
 
-    internal protected T ParseArgument<T>()
+    internal protected T ParseArgument<T>(ref SequenceReader<byte> argumentsReader)
     {
-        var value = SerializationContext.Deserialize<T>(ref ArgumentsReader);
-        if (ArgumentsReader.Remaining.Length == 0)
+        var value = SerializationContext.Deserialize<T>(ref argumentsReader);
+        if (argumentsReader.Remaining == 0)
         {
             Callees.Pools.Return(Arguments);
             Arguments = null;

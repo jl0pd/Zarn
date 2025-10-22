@@ -6,7 +6,7 @@ internal sealed class SystemExceptionBinarySerializer : ExceptionSerializerBase<
 {
     public static SystemExceptionBinarySerializer Instance { get; } = new();
 
-    protected override SystemException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override SystemException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new SystemException(message, innerException);
     }

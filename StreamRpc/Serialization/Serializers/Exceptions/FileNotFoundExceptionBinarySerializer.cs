@@ -6,7 +6,7 @@ internal sealed class FileNotFoundExceptionBinarySerializer : ExceptionSerialize
 {
     public static FileNotFoundExceptionBinarySerializer Instance { get; } = new();
 
-    protected override FileNotFoundException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override FileNotFoundException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var fileName = context.Deserialize<string>(ref source);
         return new FileNotFoundException(message, fileName, innerException);

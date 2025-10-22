@@ -6,7 +6,7 @@ internal sealed class DriveNotFoundExceptionBinarySerializer : ExceptionSerializ
 {
     public static DriveNotFoundExceptionBinarySerializer Instance { get; } = new();
 
-    protected override DriveNotFoundException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override DriveNotFoundException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new DriveNotFoundException(message, innerException);
     }

@@ -24,10 +24,10 @@ internal sealed class UnmanagedBinarySerializerFactory : BinarySerializerFactory
 
     private sealed class Serializer<T> : BinarySerializer<T> where T : unmanaged
     {
-        public override T Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+        public override T Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
         {
             Span<byte> value = stackalloc byte[Unsafe.SizeOf<T>()];
-            source.Remaining.Slice(0, Unsafe.SizeOf<T>()).CopyTo(value);
+            source.UnreadSequence.Slice(0, Unsafe.SizeOf<T>()).CopyTo(value);
             source.Advance(Unsafe.SizeOf<T>());
             return MemoryMarshal.Read<T>(value);
         }

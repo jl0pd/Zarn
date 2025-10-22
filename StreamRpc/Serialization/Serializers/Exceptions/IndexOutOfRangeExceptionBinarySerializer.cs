@@ -6,7 +6,7 @@ internal sealed class IndexOutOfRangeExceptionBinarySerializer : ExceptionSerial
 {
     public static IndexOutOfRangeExceptionBinarySerializer Instance { get; } = new();
 
-    protected override IndexOutOfRangeException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override IndexOutOfRangeException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new IndexOutOfRangeException(message, innerException);
     }

@@ -6,7 +6,7 @@ internal sealed class HttpIOExceptionBinarySerializer : ExceptionSerializerBase<
 {
     public static HttpIOExceptionBinarySerializer Instance { get; } = new();
 
-    protected override HttpIOException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override HttpIOException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var error = context.Deserialize<HttpRequestError>(ref source);
         return new HttpIOException(error, message, innerException);

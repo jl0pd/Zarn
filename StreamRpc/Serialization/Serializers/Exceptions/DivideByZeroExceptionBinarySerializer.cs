@@ -6,7 +6,7 @@ internal sealed class DivideByZeroExceptionBinarySerializer : ExceptionSerialize
 {
     public static DivideByZeroExceptionBinarySerializer Instance { get; } = new();
 
-    protected override DivideByZeroException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override DivideByZeroException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new DivideByZeroException(message, innerException);
     }

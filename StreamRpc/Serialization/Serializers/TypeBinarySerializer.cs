@@ -46,7 +46,7 @@ internal sealed class TypeBinarySerializer : BinarySerializer<Type?>
         return newName;
     }
 
-    public override Type? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override Type? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var name = StringBinarySerializer.Instance.Deserialize(ref source, context);
         if (name is null)

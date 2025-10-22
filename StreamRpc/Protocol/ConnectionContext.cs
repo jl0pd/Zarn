@@ -225,7 +225,7 @@ internal sealed class ConnectionContext
     private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
-        var options = (MessageOptions)reader.FirstSpan[0];
+        var options = (MessageOptions)reader.UnreadSpan[0];
 
         reader.Advance(2);
 
@@ -276,7 +276,7 @@ internal sealed class ConnectionContext
         }
         callee.Arguments = message;
         callee.Impl = _calleeServices.GetService(calleeType) ?? throw new InvalidOperationException();
-        callee.ArgumentsReader = reader;
+        callee.ReaderOffset = reader.Consumed;
         callee.Cts = Pools.GetCts();
 
         ThreadPool.UnsafeQueueUserWorkItem(callee, false);
@@ -303,7 +303,7 @@ internal sealed class ConnectionContext
             invoker.Complete(opId.Id, ex);
         }
 
-        Debug.Assert(reader.Remaining.IsEmpty);
+        Debug.Assert(reader.Remaining == 0);
 
         Pools.Return(message);
     }

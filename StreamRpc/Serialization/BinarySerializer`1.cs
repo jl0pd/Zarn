@@ -35,7 +35,7 @@ public abstract class BinarySerializer<T> : BinarySerializer
         Serialize((T)value!, writer, context);
     }
 
-    public sealed override object? Deserialize(Type type, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public sealed override object? Deserialize(Type type, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         if (!type.IsAssignableTo(typeof(T)))
         {
@@ -46,5 +46,5 @@ public abstract class BinarySerializer<T> : BinarySerializer
 
     public abstract void Serialize(T value, IBufferWriter<byte> writer, BinarySerializationContext context);
 
-    public abstract T Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context);
+    public abstract T Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context);
 }

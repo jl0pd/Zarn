@@ -10,7 +10,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
 
     internal override byte[] TypePrefix { get; } = [(byte)ObjectType.String];
 
-    public override string? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override string? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         int length = PackedIntBinarySerializer.Instance.Deserialize(ref source, context);
         if (length == -1)
@@ -27,9 +27,8 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
         }
         else
         {
-            var src = source.Remaining.Slice(0, length);
+            var result = Encoding.UTF8.GetString(source.UnreadSequence.Slice(0, length));
             source.Advance(length);
-            var result = Encoding.UTF8.GetString(src);
             return result;
         }
     }

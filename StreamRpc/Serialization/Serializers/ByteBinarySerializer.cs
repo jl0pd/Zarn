@@ -6,9 +6,9 @@ internal sealed class ByteBinarySerializer : BinarySerializer<byte>
 {
     public static ByteBinarySerializer Instance { get; } = new();
 
-    public override byte Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override byte Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        var result = source.FirstSpan[0];
+        var result = source.UnreadSpan[0];
         source.Advance(1);
         return result;
     }

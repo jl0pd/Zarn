@@ -6,9 +6,9 @@ internal sealed class BoolBinarySerializer : BinarySerializer<bool>
 {
     public static BoolBinarySerializer Instance { get; } = new();
 
-    public override bool Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override bool Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        var result = source.FirstSpan[0] != 0;
+        var result = source.UnreadSpan[0] != 0;
         source.Advance(1);
         return result;
     }

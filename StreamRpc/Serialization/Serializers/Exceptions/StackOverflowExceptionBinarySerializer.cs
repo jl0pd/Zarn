@@ -7,7 +7,7 @@ internal sealed class StackOverflowExceptionBinarySerializer : ExceptionSerializ
 {
     public static StackOverflowExceptionBinarySerializer Instance { get; } = new();
 
-    protected override StackOverflowException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override StackOverflowException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new StackOverflowException(message, innerException);
     }

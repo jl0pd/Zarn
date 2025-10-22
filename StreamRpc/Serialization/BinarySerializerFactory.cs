@@ -21,7 +21,7 @@ public abstract class BinarySerializerFactory : BinarySerializer
         throw new InvalidOperationException("Serializer factory cannot serialize object on it's own");
     }
 
-    public sealed override object? Deserialize(Type type, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public sealed override object? Deserialize(Type type, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         throw new InvalidOperationException("Serializer factory cannot serialize object on it's own");
     }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Reflection;
 using System.Text;
 using StreamRpc.Serialization;
@@ -78,7 +79,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
 
 internal sealed class MethodSignatureBinarySerializer : BinarySerializer<MethodSignature>
 {
-    public override MethodSignature Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override MethodSignature Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var name = context.Deserialize<string>(ref source);
         var parameters = context.Deserialize<SignatureType[]>(ref source);
@@ -87,7 +88,7 @@ internal sealed class MethodSignatureBinarySerializer : BinarySerializer<MethodS
         return new MethodSignature(name, parameters, retType);
     }
 
-    public override void Serialize(MethodSignature value, System.Buffers.IBufferWriter<byte> writer, BinarySerializationContext context)
+    public override void Serialize(MethodSignature value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
         context.Serialize(value.Name, writer);
         context.Serialize(value.Parameters, writer);

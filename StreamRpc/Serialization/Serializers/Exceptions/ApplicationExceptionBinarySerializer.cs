@@ -6,7 +6,7 @@ internal sealed class ApplicationExceptionBinarySerializer : ExceptionSerializer
 {
     public static ApplicationExceptionBinarySerializer Instance { get; } = new();
 
-    protected override ApplicationException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ApplicationException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new ApplicationException(message, innerException);
     }

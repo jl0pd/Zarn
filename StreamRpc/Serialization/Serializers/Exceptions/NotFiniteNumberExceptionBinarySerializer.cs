@@ -7,7 +7,7 @@ internal sealed class NotFiniteNumberExceptionBinarySerializer : ExceptionSerial
 {
     public static NotFiniteNumberExceptionBinarySerializer Instance { get; } = new();
 
-    protected override NotFiniteNumberException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override NotFiniteNumberException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var offendingNumber = context.Deserialize<double>(ref source);
         return new NotFiniteNumberException(message, offendingNumber, innerException);

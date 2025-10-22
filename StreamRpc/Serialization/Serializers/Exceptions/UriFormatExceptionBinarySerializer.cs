@@ -6,7 +6,7 @@ internal sealed class UriFormatExceptionBinarySerializer : ExceptionSerializerBa
 {
     public static UriFormatExceptionBinarySerializer Instance { get; } = new();
 
-    protected override UriFormatException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override UriFormatException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new UriFormatException(message, innerException);
     }

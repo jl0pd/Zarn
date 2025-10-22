@@ -6,7 +6,7 @@ internal sealed class NotImplementedExceptionBinarySerializer : ExceptionSeriali
 {
     public static NotImplementedExceptionBinarySerializer Instance { get; } = new();
 
-    protected override NotImplementedException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override NotImplementedException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new NotImplementedException(message, innerException);
     }

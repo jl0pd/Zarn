@@ -6,7 +6,7 @@ internal sealed class TaskCanceledExceptionBinarySerializer : ExceptionSerialize
 {
     public static TaskCanceledExceptionBinarySerializer Instance { get; } = new();
 
-    protected override TaskCanceledException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override TaskCanceledException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new TaskCanceledException(message, innerException);
     }

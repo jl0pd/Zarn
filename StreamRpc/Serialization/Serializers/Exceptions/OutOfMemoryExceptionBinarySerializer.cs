@@ -6,7 +6,7 @@ internal sealed class OutOfMemoryExceptionBinarySerializer : ExceptionSerializer
 {
     public static OutOfMemoryExceptionBinarySerializer Instance { get; } = new();
 
-    protected override OutOfMemoryException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override OutOfMemoryException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new OutOfMemoryException(message, innerException);
     }

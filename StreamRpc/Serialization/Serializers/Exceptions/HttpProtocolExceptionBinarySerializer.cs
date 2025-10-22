@@ -6,7 +6,7 @@ internal sealed class HttpProtocolExceptionBinarySerializer : ExceptionSerialize
 {
     public static HttpProtocolExceptionBinarySerializer Instance { get; } = new();
 
-    protected override HttpProtocolException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override HttpProtocolException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var error = context.Deserialize<long>(ref source);
         return new HttpProtocolException(error, message, innerException);

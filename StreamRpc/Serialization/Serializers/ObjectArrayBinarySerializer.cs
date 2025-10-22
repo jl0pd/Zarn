@@ -8,7 +8,7 @@ internal sealed class ObjectArrayBinarySerializer : BinarySerializer<object?[]?>
 
     public override bool CanConvert(Type type) => type == typeof(object[]);
 
-    public override object?[]? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override object?[]? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var length = context.Deserialize<int>(ref source);
         switch (length)

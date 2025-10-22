@@ -7,7 +7,7 @@ internal sealed class UnreachableExceptionBinarySerializer : ExceptionSerializer
 {
     public static UnreachableExceptionBinarySerializer Instance { get; } = new();
 
-    protected override UnreachableException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override UnreachableException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new UnreachableException(message, innerException);
     }

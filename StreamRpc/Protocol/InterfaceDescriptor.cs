@@ -90,7 +90,7 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
 
 internal sealed class InterfaceDescriptorBinarySerializer : BinarySerializer<InterfaceDescriptor>
 {
-    public override InterfaceDescriptor Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override InterfaceDescriptor Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var name = context.Deserialize<string>(ref source);
         var count = context.Deserialize<int>(ref source);

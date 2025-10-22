@@ -1,5 +1,5 @@
+using System.Buffers;
 using System.Diagnostics;
-using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
@@ -20,7 +20,7 @@ internal sealed class InvokerState(Guid id, ConnectionContext context, int maxCo
         Remove(opId).Complete(exception);
     }
 
-    public void Complete(short opId, ref ReadOnlySequenceReader<byte> reader)
+    public void Complete(short opId, ref SequenceReader<byte> reader)
     {
         Remove(opId).Complete(ref reader);
     }

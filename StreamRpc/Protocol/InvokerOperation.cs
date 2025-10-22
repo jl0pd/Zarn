@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
@@ -116,7 +117,7 @@ internal abstract class InvokerOperation
         Connection.Dispatch(RequestOptions, writer, null);
     }
 
-    public void Complete(ref ReadOnlySequenceReader<byte> responseBody)
+    public void Complete(ref SequenceReader<byte> responseBody)
     {
         if (Interlocked.CompareExchange(ref _isResultSet, 1, 0) == 0)
         {
@@ -124,7 +125,7 @@ internal abstract class InvokerOperation
         }
     }
 
-    protected abstract void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody);
+    protected abstract void CompleteCore(ref SequenceReader<byte> responseBody);
 
     public void Complete(Exception e)
     {
@@ -158,7 +159,7 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
         return new ValueTask<T>(this, _tcs.Version);
     }
 
-    protected override void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody)
+    protected override void CompleteCore(ref SequenceReader<byte> responseBody)
     {
         Debug.Assert(SerializationContext is { });
         var result = SerializationContext.Deserialize<T>(ref responseBody);
@@ -205,7 +206,7 @@ internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
         return new ValueTask(this, _tcs.Version);
     }
 
-    protected override void CompleteCore(ref ReadOnlySequenceReader<byte> responseBody)
+    protected override void CompleteCore(ref SequenceReader<byte> responseBody)
     {
         _tcs.SetResult(null);
     }

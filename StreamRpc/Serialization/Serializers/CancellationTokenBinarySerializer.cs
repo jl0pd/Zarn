@@ -6,7 +6,7 @@ internal sealed class CancellationTokenBinarySerializer : BinarySerializer<Cance
 {
     public static CancellationTokenBinarySerializer Instance { get; } = new();
 
-    public override CancellationToken Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override CancellationToken Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new CancellationToken(context.Deserialize<bool>(ref source));
     }

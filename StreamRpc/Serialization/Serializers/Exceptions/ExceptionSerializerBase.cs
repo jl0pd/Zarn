@@ -10,7 +10,7 @@ internal abstract class ExceptionSerializerBase<T> : BinarySerializer<T> where T
         return type == typeof(T); // convert exact type, without derived types
     }
 
-    public sealed override T Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public sealed override T Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var innerException = (Exception?)context.DeserializeAny(ref source);
         var stackTrace = context.Deserialize<string?>(ref source);
@@ -28,7 +28,7 @@ internal abstract class ExceptionSerializerBase<T> : BinarySerializer<T> where T
         return result;
     }
 
-    protected abstract T DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context);
+    protected abstract T DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context);
 
     public sealed override void Serialize(T value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {

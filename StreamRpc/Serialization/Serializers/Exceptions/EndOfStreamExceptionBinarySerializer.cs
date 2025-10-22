@@ -6,7 +6,7 @@ internal sealed class EndOfStreamExceptionBinarySerializer : ExceptionSerializer
 {
     public static EndOfStreamExceptionBinarySerializer Instance { get; } = new();
 
-    protected override EndOfStreamException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override EndOfStreamException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new EndOfStreamException(message, innerException);
     }

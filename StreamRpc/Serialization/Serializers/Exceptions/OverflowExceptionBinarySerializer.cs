@@ -6,7 +6,7 @@ internal sealed class OverflowExceptionBinarySerializer : ExceptionSerializerBas
 {
     public static OverflowExceptionBinarySerializer Instance { get; } = new();
 
-    protected override OverflowException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override OverflowException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new OverflowException(message, innerException);
     }

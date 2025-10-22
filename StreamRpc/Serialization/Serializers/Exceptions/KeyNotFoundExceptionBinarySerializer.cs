@@ -6,7 +6,7 @@ internal sealed class KeyNotFoundExceptionBinarySerializer : ExceptionSerializer
 {
     public static KeyNotFoundExceptionBinarySerializer Instance { get; } = new();
 
-    protected override KeyNotFoundException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override KeyNotFoundException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new KeyNotFoundException(message, innerException);
     }

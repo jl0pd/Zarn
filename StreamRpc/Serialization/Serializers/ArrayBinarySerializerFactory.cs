@@ -18,7 +18,7 @@ internal sealed class ArrayBinarySerializerFactory : BinarySerializerFactory
 
     private sealed class Serializer<T> : BinarySerializer<T[]?>
     {
-        public override T[]? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+        public override T[]? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
         {
             int length = context.Deserialize<int>(ref source);
             switch (length)

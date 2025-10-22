@@ -4,7 +4,7 @@ namespace StreamRpc.Serialization.Serializers;
 
 internal sealed class ByteMemoryBinarySerializer : BinarySerializer<Memory<byte>>
 {
-    public override Memory<byte> Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override Memory<byte> Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         int length = context.Deserialize<int>(ref source);
         if (length < 0)
@@ -12,7 +12,7 @@ internal sealed class ByteMemoryBinarySerializer : BinarySerializer<Memory<byte>
             throw new InvalidDataException();
         }
 
-        var result = source.Remaining.Slice(0, length).ToArray();
+        var result = source.UnreadSequence.Slice(0, length).ToArray();
         source.Advance(length);
         return result;
     }

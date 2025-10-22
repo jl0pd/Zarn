@@ -6,7 +6,7 @@ internal sealed class SemaphoreFullExceptionBinarySerializer : ExceptionSerializ
 {
     public static SemaphoreFullExceptionBinarySerializer Instance { get; } = new();
 
-    protected override SemaphoreFullException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override SemaphoreFullException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new SemaphoreFullException(message, innerException);
     }

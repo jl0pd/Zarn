@@ -8,7 +8,7 @@ internal sealed class ArgumentOutOfRangeExceptionBinarySerializer : ExceptionSer
 
     private static readonly string[] s_newLines = ["\r\n", "\n", "\r"];
 
-    protected override ArgumentOutOfRangeException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ArgumentOutOfRangeException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var paramName = context.Deserialize<string>(ref source);
         var actualValue = context.DeserializeAny(ref source);

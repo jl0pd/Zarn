@@ -6,7 +6,7 @@ internal sealed class DirectoryNotFoundExceptionBinarySerializer : ExceptionSeri
 {
     public static DirectoryNotFoundExceptionBinarySerializer Instance { get; } = new();
 
-    protected override DirectoryNotFoundException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override DirectoryNotFoundException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new DirectoryNotFoundException(message, innerException);
     }

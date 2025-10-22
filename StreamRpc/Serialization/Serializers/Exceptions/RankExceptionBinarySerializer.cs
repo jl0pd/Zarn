@@ -6,7 +6,7 @@ internal sealed class RankExceptionBinarySerializer : ExceptionSerializerBase<Ra
 {
     public static RankExceptionBinarySerializer Instance { get; } = new();
 
-    protected override RankException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override RankException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new RankException(message, innerException);
     }

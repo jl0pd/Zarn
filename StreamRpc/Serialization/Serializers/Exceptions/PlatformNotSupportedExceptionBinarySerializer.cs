@@ -6,7 +6,7 @@ internal sealed class PlatformNotSupportedExceptionBinarySerializer : ExceptionS
 {
     public static PlatformNotSupportedExceptionBinarySerializer Instance { get; } = new();
 
-    protected override PlatformNotSupportedException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override PlatformNotSupportedException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new PlatformNotSupportedException(message, innerException);
     }

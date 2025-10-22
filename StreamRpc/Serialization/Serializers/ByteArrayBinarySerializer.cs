@@ -8,7 +8,7 @@ internal sealed class ByteArrayBinarySerializer : BinarySerializer<byte[]?>
 
     internal override byte[] TypePrefix { get; } = [(byte)(ObjectType.Byte | ObjectType.Array)];
 
-    public override byte[]? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override byte[]? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         int length = context.Deserialize<int>(ref source);
         if (length == -1)
@@ -25,7 +25,7 @@ internal sealed class ByteArrayBinarySerializer : BinarySerializer<byte[]?>
         }
         else
         {
-            var result = source.Remaining.Slice(0, length).ToArray();
+            var result = source.UnreadSequence.Slice(0, length).ToArray();
             source.Advance(length);
             return result;
         }

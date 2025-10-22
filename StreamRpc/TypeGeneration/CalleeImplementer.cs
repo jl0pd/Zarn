@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Buffers;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
 using StreamRpc.Protocol;
@@ -67,26 +68,25 @@ internal static class CalleeImplementer
     private static void ImplementDispatchCore(TypeBuilder typeBuilder, MethodBuilder[] stubs)
     {
         /*
-        internal protected override void DispatchCore(int methodSlot)
+        internal protected override void DispatchCore(ref SequenceReader<byte> argumentsReader, int methodSlot)
         {
             switch (methodSlot)
             {
                 case 0:
-                    _0();
+                    _0(ref argumentsReader);
                     break;
                 case 1:
-                    _1();
+                    _1(ref argumentsReader);
                     break;
             }
         }
         */
 
-
         var method = typeBuilder.DefineMethod(
                         nameof(CalleeBase.DispatchCore),
                         MethodAttributes.FamORAssem | MethodAttributes.Virtual | MethodAttributes.Final,
                         typeof(void),
-                        [typeof(int)]);
+                        [typeof(SequenceReader<byte>).MakeByRefType(), typeof(int)]);
 
         var il = method.GetILGenerator();
 
@@ -98,6 +98,7 @@ internal static class CalleeImplementer
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Switch, branchTargets);
 
         for (int i = 0; i < stubs.Length; i++)
@@ -125,13 +126,19 @@ internal static class CalleeImplementer
     private static MethodBuilder ImplementInvokeStub(TypeBuilder typeBuilder, MethodInfo interfaceMethod, FieldBuilder implField, int i)
     {
         /*
-        var arg1 = base.ParseArgument<arg1Type>();
-        var res = _impl.InterfaceMethod(arg1);
+        private void InvokeStub#N(ref SequenceReader<byte> argumentsReader)
+        {
+            var arg1 = base.ParseArgument<arg1Type>(ref argumentsReader);
+            var res = _impl.InterfaceMethod(arg1);
 
-        Complete(res);
+            Complete(res);
+        }
         */
 
-        var methodBuilder = typeBuilder.DefineMethod("InvokeStub#" + i, MethodAttributes.Private);
+        var methodBuilder = typeBuilder.DefineMethod("InvokeStub#" + i,
+                                                     MethodAttributes.Private,
+                                                     typeof(void),
+                                                     [typeof(SequenceReader<byte>).MakeByRefType()]);
 
         var resultType = ImplementerCommon.GetValueType(interfaceMethod.ReturnType);
 
@@ -145,6 +152,7 @@ internal static class CalleeImplementer
         foreach (var param in interfaceMethod.GetParameters())
         {
             il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, CalleeBase_ParseArgument.MakeGenericMethod(param.ParameterType));
         }
 

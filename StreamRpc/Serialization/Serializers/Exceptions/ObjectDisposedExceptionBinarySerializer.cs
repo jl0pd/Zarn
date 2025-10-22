@@ -6,7 +6,7 @@ internal sealed class ObjectDisposedExceptionBinarySerializer : ExceptionSeriali
 {
     public static ObjectDisposedExceptionBinarySerializer Instance { get; } = new();
 
-    protected override ObjectDisposedException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ObjectDisposedException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var objectName = context.Deserialize<string>(ref source);
         if (objectName is { })

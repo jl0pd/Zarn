@@ -28,7 +28,7 @@ public abstract class RpcStreamProvider : IAsyncDisposable
                 return ValueTask.FromCanceled<Stream?>(cancellationToken);
             }
 
-            return ValueTask.FromResult<Stream?>(Interlocked.Exchange(ref stream, null));
+            return ValueTask.FromResult(Interlocked.Exchange(ref stream, null));
         }
     }
 

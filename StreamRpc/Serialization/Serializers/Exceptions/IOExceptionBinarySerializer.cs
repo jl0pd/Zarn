@@ -6,7 +6,7 @@ internal sealed class IOExceptionBinarySerializer : ExceptionSerializerBase<IOEx
 {
     public static IOExceptionBinarySerializer Instance { get; } = new();
 
-    protected override IOException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override IOException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new IOException(message, innerException);
     }

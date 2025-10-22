@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections;
 using System.Diagnostics;
-using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
@@ -29,7 +28,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
         public void SetRunningIndex(long index) => RunningIndex = index;
     }
 
-    public ReadOnlySequenceReader<T> GetReader()
+    public ReadOnlySequence<T> GetSequence()
     {
         if (FirstChunk is null)
         {
@@ -43,7 +42,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
             current.SetMemory();
         }
 
-        return new ReadOnlySequenceReader<T>(new ReadOnlySequence<T>(FirstChunk, 0, LastChunk, LastChunk.Written));
+        return (new ReadOnlySequence<T>(FirstChunk, 0, LastChunk, LastChunk.Written));
     }
 
     public Chunk FirstChunkRequired => FirstChunk ?? throw ThrowHelper.Unreachable;

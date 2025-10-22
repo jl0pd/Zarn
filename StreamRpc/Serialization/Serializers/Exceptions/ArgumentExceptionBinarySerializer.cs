@@ -6,7 +6,7 @@ internal sealed class ArgumentExceptionBinarySerializer : ExceptionSerializerBas
 {
     public static ArgumentExceptionBinarySerializer Instance { get; } = new();
 
-    protected override ArgumentException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ArgumentException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var paramName = context.Deserialize<string>(ref source);
         if (innerException is { })

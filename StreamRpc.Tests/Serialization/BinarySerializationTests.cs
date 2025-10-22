@@ -31,10 +31,11 @@ public sealed class BinarySerializationTests
 
         context.Serialize(value, writer);
 
-        var reader = new ReadOnlySequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
+        var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
 
         var result = context.Deserialize<T>(ref reader);
 
+        Assert.Equal(0, reader.Remaining);
         Assert.Equal(value, result);
     }
 }

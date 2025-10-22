@@ -6,7 +6,7 @@ internal sealed class ArithmeticExceptionBinarySerializer : ExceptionSerializerB
 {
     public static ArithmeticExceptionBinarySerializer Instance { get; } = new();
 
-    protected override ArithmeticException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ArithmeticException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new ArithmeticException(message, innerException);
     }

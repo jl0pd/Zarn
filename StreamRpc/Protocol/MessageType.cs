@@ -20,7 +20,7 @@ internal abstract class MessageBase
 
     public MessageOptions Options { get; set; }
 
-    protected abstract void DeserializeCore(ref ReadOnlySequenceReader<byte> reader, BinarySerializationContext serializationContext);
+    protected abstract void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext);
 
     protected abstract void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext);
 
@@ -32,10 +32,10 @@ internal abstract class MessageBase
         SerializeCore(writer, serializationContext);
     }
 
-    public void Deserialize(ref ReadOnlySequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    public void Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
     {
         DeserializeCore(ref reader, serializationContext);
-        Debug.Assert(reader.Remaining.Length == 0);
+        Debug.Assert(reader.Remaining == 0);
     }
 
     public static T ReadMessage<T>(ChunkedArrayPoolBufferWriter<byte> chunks, BinarySerializationContext serializationContext) where T : MessageBase
@@ -44,7 +44,7 @@ internal abstract class MessageBase
         return ReadMessage<T>(ref reader, serializationContext);
     }
 
-    public static T ReadMessage<T>(ref ReadOnlySequenceReader<byte> reader, BinarySerializationContext serializationContext) where T : MessageBase
+    public static T ReadMessage<T>(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext) where T : MessageBase
     {
         var options = serializationContext.Deserialize<MessageOptions>(ref reader);
         var type = serializationContext.Deserialize<MessageType>(ref reader);
@@ -57,7 +57,7 @@ internal abstract class MessageBase
         message.Options = options;
         Debug.Assert(message.Type == type);
         message.Deserialize(ref reader, serializationContext);
-        Debug.Assert(reader.Remaining.Length == 0);
+        Debug.Assert(reader.Remaining == 0);
 
         return (T)message;
     }
@@ -73,7 +73,7 @@ internal sealed class HandshakeRequestMessage : MessageBase
 
     public InterfaceDescriptor[] Interfaces { get; set; } = [];
 
-    protected override void DeserializeCore(ref ReadOnlySequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
     {
         ProtocolVersion = serializationContext.Deserialize<int>(ref reader);
         SupportedCompressions = serializationContext.Deserialize<string[]>(ref reader);
@@ -102,7 +102,7 @@ internal sealed class HandshakeResponseMessage : MessageBase
 
     public InterfaceDescriptor[] Interfaces { get; set; } = [];
 
-    protected override void DeserializeCore(ref ReadOnlySequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
     {
         Error = serializationContext.Deserialize<ErrorCode>(ref reader);
         IsLittleEndian = serializationContext.Deserialize<bool>(ref reader);

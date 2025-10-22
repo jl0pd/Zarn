@@ -205,9 +205,9 @@ public sealed class BinarySerializationContext
         }
     }
 
-    public object? DeserializeAny(ref ReadOnlySequenceReader<byte> source)
+    public object? DeserializeAny(ref SequenceReader<byte> source)
     {
-        var objType = (ObjectType)source.FirstSpan[0];
+        var objType = (ObjectType)source.UnreadSpan[0];
         source.Advance(1);
         if (objType == ObjectType.Null)
         {
@@ -230,7 +230,7 @@ public sealed class BinarySerializationContext
         }
     }
 
-    private object? ReadCustomObject(ref ReadOnlySequenceReader<byte> source)
+    private object? ReadCustomObject(ref SequenceReader<byte> source)
     {
         var type = GetSerializer<Type>().Deserialize(ref source, this);
         var binarySerializer = GetSerializer(type);
@@ -253,7 +253,7 @@ public sealed class BinarySerializationContext
     }
 
     [SuppressMessage("Usage", "CA2263:Prefer generic overload when type is known")]
-    public T Deserialize<T>(ref ReadOnlySequenceReader<byte> source)
+    public T Deserialize<T>(ref SequenceReader<byte> source)
     {
         var serializer = GetSerializer(typeof(T));
         if (serializer is BinarySerializer<T> ser)

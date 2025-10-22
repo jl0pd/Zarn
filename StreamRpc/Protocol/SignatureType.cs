@@ -66,7 +66,7 @@ internal readonly struct SignatureType : IEquatable<SignatureType>
 
 internal sealed class SignatureTypeBinarySerializer : BinarySerializer<SignatureType>
 {
-    public override SignatureType Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override SignatureType Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var kind = (SignatureTypeKind)context.Deserialize<byte>(ref source);
         switch (kind)

@@ -6,7 +6,7 @@ internal sealed class InvalidCastExceptionBinarySerializer : ExceptionSerializer
 {
     public static InvalidCastExceptionBinarySerializer Instance { get; } = new();
 
-    protected override InvalidCastException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override InvalidCastException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new InvalidCastException(message, innerException);
     }

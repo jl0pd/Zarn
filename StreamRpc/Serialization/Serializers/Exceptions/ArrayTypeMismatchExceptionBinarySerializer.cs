@@ -6,7 +6,7 @@ internal sealed class ArrayTypeMismatchExceptionBinarySerializer : ExceptionSeri
 {
     public static ArrayTypeMismatchExceptionBinarySerializer Instance { get; } = new();
 
-    protected override ArrayTypeMismatchException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override ArrayTypeMismatchException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new ArrayTypeMismatchException(message, innerException);
     }

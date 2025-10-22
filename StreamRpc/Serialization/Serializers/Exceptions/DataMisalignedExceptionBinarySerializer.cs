@@ -6,7 +6,7 @@ internal sealed class DataMisalignedExceptionBinarySerializer : ExceptionSeriali
 {
     public static DataMisalignedExceptionBinarySerializer Instance { get; } = new();
 
-    protected override DataMisalignedException DeserializeCore(string message, Exception? innerException, ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    protected override DataMisalignedException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new DataMisalignedException(message, innerException);
     }

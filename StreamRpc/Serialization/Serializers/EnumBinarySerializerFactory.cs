@@ -41,7 +41,7 @@ internal sealed class EnumBinarySerializerFactory : BinarySerializerFactory
     where TValue : Enum
     where TStorage : struct
     {
-        public override TValue Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+        public override TValue Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
         {
             var result = context.Deserialize<TStorage>(ref source);
             return Unsafe.As<TStorage, TValue>(ref result);

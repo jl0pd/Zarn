@@ -6,7 +6,7 @@ internal sealed class ByteReadOnlyMemoryBinarySerializer : BinarySerializer<Read
 {
     public static ByteReadOnlyMemoryBinarySerializer Instance { get; } = new();
 
-    public override ReadOnlyMemory<byte> Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override ReadOnlyMemory<byte> Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         int length = context.Deserialize<int>(ref source);
         if (length < 0)
@@ -14,7 +14,7 @@ internal sealed class ByteReadOnlyMemoryBinarySerializer : BinarySerializer<Read
             throw new InvalidDataException();
         }
 
-        var result = source.Remaining.Slice(0, length).ToArray();
+        var result = source.UnreadSequence.Slice(0, length).ToArray();
         source.Advance(length);
         return result;
     }

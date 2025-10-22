@@ -4,7 +4,7 @@ namespace StreamRpc.Serialization.Serializers;
 
 internal sealed class ByteMemoryOwnerBinarySerializer : BinarySerializer<IMemoryOwner<byte>?>
 {
-    public override IMemoryOwner<byte>? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override IMemoryOwner<byte>? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         int length = context.Deserialize<int>(ref source);
         if (length == -1)
@@ -21,9 +21,9 @@ internal sealed class ByteMemoryOwnerBinarySerializer : BinarySerializer<IMemory
         }
         else
         {
-            var src = source.Remaining.Slice(0, length);
+            var result = context.ToMemory(source.UnreadSequence.Slice(0, length));
             source.Advance(length);
-            return context.ToMemory(src);
+            return result;
         }
     }
 

@@ -6,7 +6,7 @@ namespace StreamRpc.Serialization.Serializers;
 
 internal sealed class JsonBinarySerializer<T>(JsonSerializerOptions options) : BinarySerializer<T?>
 {
-    public override T? Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override T? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var json = context.Deserialize<string?>(ref source);
         if (json is null)

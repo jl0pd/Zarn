@@ -6,9 +6,9 @@ internal sealed class PackedIntBinarySerializer : BinarySerializer<int>
 {
     public static PackedIntBinarySerializer Instance { get; } = new();
 
-    public override int Deserialize(ref ReadOnlySequenceReader<byte> source, BinarySerializationContext context)
+    public override int Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        if (PackedInt.TryRead(source.FirstSpan, out long value, out int consumed))
+        if (PackedInt.TryRead(source.UnreadSpan, out long value, out int consumed))
         {
             // value was read from single span, fast path
             source.Advance(consumed);
