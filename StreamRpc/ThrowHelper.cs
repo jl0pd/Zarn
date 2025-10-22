@@ -11,7 +11,7 @@ internal static class ThrowHelper
         {
             var message = "Execution has reached point that is thought to be unreachable";
             Debug.Fail(message);
-            return new Exception(message);
+            return new UnreachableException(message);
         }
     }
 
