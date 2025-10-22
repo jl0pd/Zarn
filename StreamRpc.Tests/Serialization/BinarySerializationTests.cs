@@ -24,7 +24,7 @@ public sealed class BinarySerializationTests
     [InlineData(typeof(Dictionary<,>))]
     public void TestRoundtrip<T>(T value)
     {
-        var settings = new BinarySerializationSettings();
+        var settings = new RpcSettings();
         var context = new BinarySerializationContext(settings);
 
         var writer = new ArrayBufferWriter<byte>();

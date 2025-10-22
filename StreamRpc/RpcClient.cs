@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using StreamRpc.Protocol;
-using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
 namespace StreamRpc;
@@ -12,7 +11,7 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
     private readonly IRpcClientStrategy _strategy;
     private CancellationTokenSource? _cts;
 
-    public RpcClient(RpcStreamProvider streamProvider, BinarySerializationSettings? settings = null)
+    public RpcClient(RpcStreamProvider streamProvider, RpcSettings? settings = null)
     : this(new ClientRpcClientStrategy(streamProvider, settings))
     {
     }

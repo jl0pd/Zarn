@@ -7,7 +7,7 @@ namespace StreamRpc;
 public sealed class RpcServer : IAsyncDisposable
 {
     private readonly RpcStreamProvider _streamProvider;
-    private readonly BinarySerializationSettings? _settings;
+    private readonly RpcSettings? _settings;
     private CancellationTokenSource? _cts = new();
     private readonly CancellationToken _cancellationToken;
     private ServiceProvider? _services;
@@ -16,7 +16,7 @@ public sealed class RpcServer : IAsyncDisposable
     public event EventHandler<ClientConnectedEventArgs>? ClientConnected;
     public event EventHandler<ThreadExceptionEventArgs>? ExceptionOccurred;
 
-    public RpcServer(RpcStreamProvider streamProvider, BinarySerializationSettings? settings = null)
+    public RpcServer(RpcStreamProvider streamProvider, RpcSettings? settings = null)
     {
         _streamProvider = streamProvider;
         _settings = settings;

@@ -15,7 +15,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
     private readonly Pools _pools;
     private readonly BinarySerializationContext _serializationContext;
 
-    public ClientRpcClientStrategy(RpcStreamProvider streamProvider, BinarySerializationSettings? settings)
+    public ClientRpcClientStrategy(RpcStreamProvider streamProvider, RpcSettings? settings)
     {
         _streamProvider = streamProvider;
         _serializationContext = new BinarySerializationContext(settings ?? new());

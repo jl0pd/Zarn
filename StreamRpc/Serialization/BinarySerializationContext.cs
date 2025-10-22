@@ -24,7 +24,7 @@ public sealed class BinarySerializationContext
         { typeof(ReadOnlyMemory<byte>), ByteReadOnlyMemoryBinarySerializer.Instance },
     };
 
-    private readonly List<BinarySerializerFactory> _factories = 
+    private readonly List<BinarySerializerFactory> _factories =
     [
         EnumBinarySerializerFactory.Instance,
         UnmanagedBinarySerializerFactory.Instance,
@@ -81,7 +81,7 @@ public sealed class BinarySerializationContext
 
     private readonly MemoryProvider? _memoryProvider;
 
-    public BinarySerializationContext(BinarySerializationSettings settings)
+    public BinarySerializationContext(RpcSettings settings)
     {
         _memoryProvider = settings.MemoryProvider;
 
