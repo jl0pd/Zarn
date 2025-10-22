@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using StreamRpc.Serialization;
 
@@ -19,8 +18,6 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
 
     internal ReadOnlySequenceReader<byte> ArgumentsReader;
-
-    internal ChunkedArrayPoolBufferWriter<byte>? Writer { get; set; }
 
     internal CancellationTokenSource? Cts;
     internal CalleesState Callees { get; set; } = null!;
@@ -74,13 +71,14 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected void CompleteVoid()
     {
-        Callees.CompleteResponse(this, null, Writer);
+        Callees.CompleteResponse(this, null, null);
     }
 
     internal protected void Complete<T>(T value)
     {
-        SerializationContext.Serialize(value, Writer = Callees.Pools.GetWriter());
-        CompleteVoid();
+        var writer = Callees.Pools.GetWriter();
+        SerializationContext.Serialize(value, writer);
+        Callees.CompleteResponse(this, null, writer);
     }
 
     internal protected void WaitVoidTask(Task task)
