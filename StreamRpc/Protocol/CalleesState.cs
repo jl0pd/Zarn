@@ -67,7 +67,7 @@ internal sealed class CalleesState(ConnectionContext connection, int maxConcurre
         SerializationContext.Serialize(callee.OperationId, header);
         if (exception is not null)
         {
-            SerializationContext.Serialize(exception, header);
+            SerializationContext.SerializeAny(exception, header);
         }
 
         Connection.Dispatch(options, header, returnValue);

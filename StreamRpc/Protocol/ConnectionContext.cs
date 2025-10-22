@@ -298,7 +298,8 @@ internal sealed class ConnectionContext
         }
         else
         {
-            var ex = SerializationContext.Deserialize<Exception>(ref reader);
+            var ex = (Exception?)SerializationContext.DeserializeAny(ref reader);
+            Debug.Assert(ex is { });
             invoker.Complete(opId.Id, ex);
         }
 
