@@ -67,14 +67,9 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         return value;
     }
 
-    internal protected void Fail(Exception e)
+    private void Fail(Exception e)
     {
         Callees.CompleteResponse(this, e, null);
-    }
-
-    internal protected IBufferWriter<byte> GetResponseWriter()
-    {
-        return Writer = Callees.Pools.GetWriter();
     }
 
     internal protected void CompleteVoid()
@@ -84,8 +79,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected void Complete<T>(T value)
     {
-        var writer = GetResponseWriter();
-        SerializationContext.Serialize(value, writer);
+        SerializationContext.Serialize(value, Writer = Callees.Pools.GetWriter());
         CompleteVoid();
     }
 
@@ -109,7 +103,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         }
     }
 
-    internal protected void CompleteVoidTask(ValueTask valueTask)
+    internal void CompleteVoidTask(ValueTask valueTask)
     {
         Debug.Assert(valueTask.IsCompleted);
         try
@@ -125,7 +119,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         CompleteVoid();
     }
 
-    internal protected void CompleteTask<T>(ValueTask<T> valueTask)
+    internal void CompleteTask<T>(ValueTask<T> valueTask)
     {
         Debug.Assert(valueTask.IsCompleted);
         T result;
