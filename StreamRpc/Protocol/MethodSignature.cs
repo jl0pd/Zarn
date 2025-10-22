@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using StreamRpc.Serialization;
@@ -56,6 +57,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
         return true;
     }
 
+    [ExcludeFromCodeCoverage]
     public override string ToString()
     {
         var sb = new StringBuilder(Name);

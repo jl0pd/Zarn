@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using StreamRpc.Tests.TestTypes;
 
@@ -38,6 +39,7 @@ public sealed class ExceptionPropagationTests : RpcTestsBase
         return SimpleTest(typeof(T), args, e => assert((T)e));
     }
 
+    [ExcludeFromCodeCoverage]
     private static object? GetLiteralValue(Expression expression)
     {
         return expression switch

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using StreamRpc.Serialization;
@@ -63,6 +64,7 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
         return result;
     }
 
+    [ExcludeFromCodeCoverage]
     public override string ToString()
     {
         var sb = new StringBuilder(AssemblyQualifiedName);

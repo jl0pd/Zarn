@@ -37,6 +37,7 @@ internal readonly struct SignatureType : IEquatable<SignatureType>
         Index = index;
     }
 
+    [ExcludeFromCodeCoverage]
     public override string ToString()
     {
         return Kind switch

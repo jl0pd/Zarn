@@ -5,6 +5,7 @@ namespace StreamRpc;
 
 internal static class ThrowHelper
 {
+    [ExcludeFromCodeCoverage]
     public static Exception Unreachable
     {
         get
@@ -16,6 +17,7 @@ internal static class ThrowHelper
     }
 
     [DoesNotReturn]
+    [ExcludeFromCodeCoverage]
     public static Exception Fail(string message)
     {
         Debug.Fail(message);
