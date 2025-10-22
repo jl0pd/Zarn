@@ -150,7 +150,7 @@ internal abstract class InvokerOperation
 
 internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T>
 {
-    private ManualResetValueTaskSourceCore<T> _tcs;
+    private ManualResetValueTaskSourceCore<T> _tcs = new() { RunContinuationsAsynchronously = true };
 
     public ValueTask<T> Start()
     {
@@ -197,7 +197,7 @@ internal sealed class InvokerOperation<T> : InvokerOperation, IValueTaskSource<T
 
 internal sealed class VoidInvokerOperation : InvokerOperation, IValueTaskSource
 {
-    private ManualResetValueTaskSourceCore<object?> _tcs;
+    private ManualResetValueTaskSourceCore<object?> _tcs = new() { RunContinuationsAsynchronously = true };
 
     public ValueTask Start()
     {

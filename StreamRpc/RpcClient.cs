@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using StreamRpc.Protocol;
 using StreamRpc.Serialization;
+using StreamRpc.Utils;
 
 namespace StreamRpc;
 
@@ -27,6 +28,8 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
         {
             throw new InvalidOperationException("Client has already started");
         }
+
+        await ThreadingHelper.LeaveContext();
 
         _cts = cancellationToken.CanBeCanceled
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)

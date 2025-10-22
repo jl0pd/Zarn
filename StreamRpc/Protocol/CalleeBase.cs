@@ -105,7 +105,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
             var worker = Callees.Pools.GetOnCompletedWorker();
             worker.Task = valueTask;
             worker.Callee = this;
-            valueTask.GetAwaiter().OnCompleted(worker.OnCompleted);
+            valueTask.GetAwaiter().UnsafeOnCompleted(worker.OnCompleted);
         }
     }
 
@@ -158,7 +158,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
             var worker = Callees.Pools.GetOnCompletedWorker<T>();
             worker.Task = valueTask;
             worker.Callee = this;
-            valueTask.GetAwaiter().OnCompleted(worker.OnCompleted);
+            valueTask.GetAwaiter().UnsafeOnCompleted(worker.OnCompleted);
         }
     }
 }
