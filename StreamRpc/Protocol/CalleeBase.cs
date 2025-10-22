@@ -85,12 +85,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         Callees.CompleteResponse(this, null, writer);
     }
 
-    internal protected void WaitVoidTask(Task task)
-    {
-        WaitVoidValueTask(new ValueTask(task));
-    }
-
-    internal protected void WaitVoidValueTask(ValueTask valueTask)
+    internal protected void WaitVoidTask(ValueTask valueTask)
     {
         if (valueTask.IsCompleted)
         {
@@ -138,12 +133,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         Complete(result);
     }
 
-    internal protected void WaitTask<T>(Task<T> task)
-    {
-        WaitValueTask(new ValueTask<T>(task));
-    }
-
-    internal protected void WaitValueTask<T>(ValueTask<T> valueTask)
+    internal protected void WaitTask<T>(ValueTask<T> valueTask)
     {
         if (valueTask.IsCompleted)
         {

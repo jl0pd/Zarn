@@ -14,11 +14,10 @@ internal static class CalleeImplementer
     private static readonly MethodInfo CalleeBase_ParseArgument;
     private static readonly MethodInfo CalleeBase_CompleteT;
     private static readonly MethodInfo CalleeBase_CompleteVoid;
-    private static readonly MethodInfo CalleeBase_WaitValueTaskT;
-    private static readonly MethodInfo CalleeBase_WaitVoidValueTask;
     private static readonly MethodInfo CalleeBase_WaitTaskT;
     private static readonly MethodInfo CalleeBase_WaitVoidTask;
     private static readonly MethodInfo CalleeBase_DispatchCore;
+    private static readonly ConstructorInfo ValueTask_Ctor_Task;
 
     static CalleeImplementer()
     {
@@ -36,11 +35,10 @@ internal static class CalleeImplementer
         CalleeBase_ParseArgument = typeInfo.GetDeclaredMethod(nameof(CalleeBase.ParseArgument))!;
         CalleeBase_CompleteT = typeInfo.GetDeclaredMethod(nameof(CalleeBase.Complete))!;
         CalleeBase_CompleteVoid = typeInfo.GetDeclaredMethod(nameof(CalleeBase.CompleteVoid))!;
-        CalleeBase_WaitValueTaskT = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitValueTask))!;
         CalleeBase_WaitTaskT = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitTask))!;
-        CalleeBase_WaitVoidValueTask = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitVoidValueTask))!;
         CalleeBase_WaitVoidTask = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitVoidTask))!;
         CalleeBase_DispatchCore = typeInfo.GetDeclaredMethod(nameof(CalleeBase.DispatchCore))!;
+        ValueTask_Ctor_Task = typeof(ValueTask).GetConstructor([typeof(Task)])!;
     }
 
     public static Type GetImplementation(Type interfaceType)
@@ -164,10 +162,12 @@ internal static class CalleeImplementer
         }
         else if (interfaceMethod.ReturnType == typeof(ValueTask))
         {
-            il.Emit(OpCodes.Call, CalleeBase_WaitVoidValueTask);
+            il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
         }
         else if (interfaceMethod.ReturnType == typeof(Task))
         {
+            // WaitVoidTask(new ValueTask(res));
+            il.Emit(OpCodes.Newobj, ValueTask_Ctor_Task);
             il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
         }
         else if (interfaceMethod.ReturnType.IsGenericType)
@@ -175,11 +175,15 @@ internal static class CalleeImplementer
             var typeDef = interfaceMethod.ReturnType.GetGenericTypeDefinition();
             if (typeDef == typeof(ValueTask<>))
             {
-                il.Emit(OpCodes.Call, CalleeBase_WaitValueTaskT.MakeGenericMethod(resultType));
+                il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
             }
             else if (typeDef == typeof(Task<>))
             {
-                // Wait(res);
+                // WaitTask<T>(new ValueTask<T>(res));
+                var ctor = typeof(ValueTask<>)
+                            .MakeGenericType(resultType)
+                            .GetConstructor([typeof(Task<>).MakeGenericType(resultType)])!;
+                il.Emit(OpCodes.Newobj, ctor);
                 il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
             }
             else
