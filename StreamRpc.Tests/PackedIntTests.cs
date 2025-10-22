@@ -58,19 +58,6 @@ public class PackedIntTests
         Assert.Equal(bytes, actual);
     }
 
-    private static byte[] BitsToBytes(string bits)
-    {
-        var bytes = bits.Split(' ');
-        byte[] result = new byte[bytes.Length];
-
-        for (int i = 0; i < result.Length; i++)
-        {
-            result[i] = byte.Parse(bytes[i].Replace(".", ""), NumberStyles.BinaryNumber);
-        }
-
-        return result;
-    }
-
     private static string BytesToBits(ReadOnlySpan<byte> bytes)
     {
         var sb = new StringBuilder(bytes.Length * 10);
