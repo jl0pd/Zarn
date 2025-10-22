@@ -25,14 +25,14 @@ internal enum MessageOptions : byte
     /// </summary>
     GenericType = 0x08,
 
-    Reserved10 = 0x10,
-    Reserved20 = 0x20,
-    Reserved40 = 0x40,
-
     /// <summary>
     /// Message may be split into several chunks and this flag indicates that this chunk was last.
     /// </summary>
-    LastChunk = 0x80,
+    LastChunk = 0x10,
 
-    ReservedMask = 0x70,
+    Reserved20 = 0x20,
+    Reserved40 = 0x40,
+    Reserved80 = 0x80,
+
+    ReservedMask = 0xE0,
 }
