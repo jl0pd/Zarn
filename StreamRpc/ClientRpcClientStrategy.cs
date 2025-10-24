@@ -12,13 +12,15 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
     private readonly ServiceCollection _serviceCollection = [];
     private readonly RpcStreamProvider _streamProvider;
+    private readonly RpcSettings _settings;
     private readonly Pools _pools;
     private readonly BinarySerializationContext _serializationContext;
 
     public ClientRpcClientStrategy(RpcStreamProvider streamProvider, RpcSettings? settings)
     {
         _streamProvider = streamProvider;
-        _serializationContext = new BinarySerializationContext(settings ?? new());
+        _settings = settings ?? new();
+        _serializationContext = new BinarySerializationContext(_settings);
         _pools = new Pools(_serializationContext);
         _serviceCollection.AddSingleton(new AllowedRemoteConnections());
     }
@@ -30,7 +32,8 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
     public async ValueTask<ConnectionContext> ConnectAsync(CancellationToken cancellationToken)
     {
-        var stream = await _streamProvider.OpenStreamAsync(cancellationToken);
+        var stream = await _streamProvider.OpenStreamAsync(cancellationToken) 
+            ?? throw new InvalidOperationException(nameof(RpcStreamProvider) + " has returned null");
         try
         {
             return await ConnectCore(stream, cancellationToken);
@@ -50,8 +53,10 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
         var request = new HandshakeRequestMessage
         {
-            ProtocolVersion = 1,
+            ProtocolVersionMajor = 1,
+            ProtocolVersionMinor = 0,
             SupportedCompressions = [],
+            AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
             Interfaces = Services
                             .GetRequiredService<AllowedRemoteConnections>()
                             .Select(InterfaceDescriptor.FromType)
@@ -88,7 +93,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
         if (!response.Options.HasFlag(MessageOptions.Success))
         {
-            throw new ProtocolViolationException("Unknown error occurred");
+            throw new ProtocolViolationException("Unknown error has occurred");
         }
 
         return new ConnectionContext(stream, new Pools(_pools, request.Interfaces, response.Interfaces), Services);

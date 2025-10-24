@@ -7,7 +7,8 @@ namespace StreamRpc;
 internal sealed class ServerRpcClientStrategy(Stream stream,
                                               Pools pools,
                                               AsyncServiceScope serviceScope,
-                                              InterfaceDescriptor[] interfaceDescriptors) : IRpcClientStrategy
+                                              InterfaceDescriptor[] interfaceDescriptors,
+                                              RpcSettings settings) : IRpcClientStrategy
 {
     public IServiceProvider Services => serviceScope.ServiceProvider;
 
@@ -22,7 +23,7 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
         var message = pools.GetWriter();
         if (!await StreamHelper.Read(stream, initialBuffer, message, cancellationToken))
         {
-            throw new EndOfStreamException("Could not read handskake request from client");
+            throw new EndOfStreamException("Could not read handshake request from client");
         }
 
         var request = MessageBase.ReadMessage<HandshakeRequestMessage>(message, pools.SerializationContext);
@@ -35,9 +36,14 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             Interfaces = interfaceDescriptors,
         };
 
-        if (request.ProtocolVersion != 1)
+
+        if (request.ProtocolVersionMajor != 1)
         {
-            response.Error = ErrorCode.ProtocolVersionMismatch;
+            response.Error = ErrorCode.ProtocolMajorVersionMismatch;
+        }
+        else if (request.ProtocolVersionMinor != 0 && (!settings.AllowMinorVersionMismatch || !request.AllowMinorVersionMismatch))
+        {
+            response.Error = ErrorCode.ProtocolMinorVersionMismatch;
         }
         else if (request.Options != MessageOptions.None)
         {

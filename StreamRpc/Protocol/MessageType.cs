@@ -67,7 +67,17 @@ internal sealed class HandshakeRequestMessage : MessageBase
 {
     public override MessageType Type => MessageType.HandshakeRequest;
 
-    public int ProtocolVersion { get; set; }
+    /// <summary>
+    /// Major version of protocol. Must match on client and server
+    /// </summary>
+    public int ProtocolVersionMajor { get; set; }
+
+    /// <summary>
+    /// Minor version of protocol. May mismatch if <see cref="AllowMinorVersionMismatch"/> is set.
+    /// </summary>
+    public int ProtocolVersionMinor { get; set; }
+
+    public bool AllowMinorVersionMismatch { get; set; }
 
     public string[] SupportedCompressions { get; set; } = [];
 
@@ -75,14 +85,18 @@ internal sealed class HandshakeRequestMessage : MessageBase
 
     protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
     {
-        ProtocolVersion = serializationContext.Deserialize<int>(ref reader);
+        ProtocolVersionMajor = serializationContext.Deserialize<int>(ref reader);
+        ProtocolVersionMinor = serializationContext.Deserialize<int>(ref reader);
+        AllowMinorVersionMismatch = serializationContext.Deserialize<bool>(ref reader);
         SupportedCompressions = serializationContext.Deserialize<string[]>(ref reader);
         Interfaces = serializationContext.Deserialize<InterfaceDescriptor[]>(ref reader);
     }
 
     protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
     {
-        serializationContext.Serialize(ProtocolVersion, writer);
+        serializationContext.Serialize(ProtocolVersionMajor, writer);
+        serializationContext.Serialize(ProtocolVersionMinor, writer);
+        serializationContext.Serialize(AllowMinorVersionMismatch, writer);
         serializationContext.Serialize(SupportedCompressions, writer);
         serializationContext.Serialize(Interfaces, writer);
     }

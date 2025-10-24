@@ -7,7 +7,7 @@ namespace StreamRpc;
 public sealed class RpcServer : IAsyncDisposable
 {
     private readonly RpcStreamProvider _streamProvider;
-    private readonly RpcSettings? _settings;
+    private readonly RpcSettings _settings;
     private CancellationTokenSource? _cts = new();
     private readonly CancellationToken _cancellationToken;
     private ServiceProvider? _services;
@@ -19,7 +19,7 @@ public sealed class RpcServer : IAsyncDisposable
     public RpcServer(RpcStreamProvider streamProvider, RpcSettings? settings = null)
     {
         _streamProvider = streamProvider;
-        _settings = settings;
+        _settings = settings ?? new();
         _cancellationToken = _cts.Token;
 
         _serviceDescriptors.AddSingleton(new AllowedRemoteConnections());
@@ -46,7 +46,7 @@ public sealed class RpcServer : IAsyncDisposable
                                         .Select(InterfaceDescriptor.FromType)
                                         .ToArray();
 
-            var pools = new Pools(new BinarySerializationContext(_settings ?? new()));
+            var pools = new Pools(new BinarySerializationContext(_settings));
 
             while (!_cancellationToken.IsCancellationRequested)
             {
@@ -61,7 +61,8 @@ public sealed class RpcServer : IAsyncDisposable
                                                     stream,
                                                     pools,
                                                     scope,
-                                                    interfaceDescriptors));
+                                                    interfaceDescriptors,
+                                                    _settings));
                 await client.ConnectAsync(_cancellationToken);
                 ClientConnected?.Invoke(this, new ClientConnectedEventArgs(client));
             }
