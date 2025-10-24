@@ -1,24 +1,24 @@
 using System.Buffers;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
-internal sealed class PackedIntBinarySerializer : BinarySerializer<int>
+internal sealed class PackedLongBinarySerializer : BinarySerializer<long>
 {
-    public static PackedIntBinarySerializer Instance { get; } = new();
+    public static PackedLongBinarySerializer Instance { get; } = new();
 
-    public override int Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    public override long Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         if (PackedInt.TryRead(source.UnreadSpan, out long value, out int consumed))
         {
             // value was read from single span, fast path
             source.Advance(consumed);
-            return checked((int)value);
+            return value;
         }
 
         throw new NotImplementedException();
     }
 
-    public override void Serialize(int value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public override void Serialize(long value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
         var size = PackedInt.GetRequiredSize(value);
         var span = writer.GetSpan(size);

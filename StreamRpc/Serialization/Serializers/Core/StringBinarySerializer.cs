@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class StringBinarySerializer : BinarySerializer<string?>
 {

@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class TypeBinarySerializer : BinarySerializer<Type?>
 {

@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using StreamRpc.Serialization;
-using StreamRpc.Serialization.Serializers;
+using StreamRpc.Serialization.Serializers.Core;
 
 namespace StreamRpc.Protocol;
 

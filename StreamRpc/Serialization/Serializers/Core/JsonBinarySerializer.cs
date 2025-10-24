@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class JsonBinarySerializer<T>(JsonSerializerOptions options) : BinarySerializer<T?>
 {

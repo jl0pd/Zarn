@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class JsonBinarySerializerFactory : BinarySerializerFactory
 {

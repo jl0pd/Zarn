@@ -1,4 +1,5 @@
 using System.Buffers;
+using StreamRpc.Serialization.Serializers.Core;
 
 namespace StreamRpc.Serialization.Serializers.Exceptions;
 

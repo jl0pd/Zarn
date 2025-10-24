@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class EnumBinarySerializerFactory : BinarySerializerFactory
 {

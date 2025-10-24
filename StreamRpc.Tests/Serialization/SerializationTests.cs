@@ -1,4 +1,4 @@
-using StreamRpc.Serialization.Serializers;
+using StreamRpc.Serialization.Serializers.Core;
 
 
 namespace StreamRpc.Tests.Serialization;

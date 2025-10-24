@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace StreamRpc.Serialization.Serializers;
+namespace StreamRpc.Serialization.Serializers.Core;
 
 internal sealed class ByteBinarySerializer : BinarySerializer<byte>
 {

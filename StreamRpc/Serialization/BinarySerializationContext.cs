@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using StreamRpc.Serialization.Serializers;
+using StreamRpc.Serialization.Serializers.Core;
 using StreamRpc.Serialization.Serializers.Exceptions;
 
 namespace StreamRpc.Serialization;
