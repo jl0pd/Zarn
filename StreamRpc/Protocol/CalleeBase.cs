@@ -72,6 +72,26 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected void Fail(Exception e)
     {
+        switch (Callees.Connection.Settings.UnhandledExceptionPropagationBehavior)
+        {
+            case UnhandledExceptionPropagationBehavior.Hidden:
+                FailCore(new UnhandledRpcException("Internal error has occurred"));
+                break;
+            case UnhandledExceptionPropagationBehavior.WrapToString:
+                FailCore(e as UnhandledRpcException ?? new UnhandledRpcException(e.ToString()));
+                break;
+            case UnhandledExceptionPropagationBehavior.TransparentWrap:
+                FailCore(e as UnhandledRpcException 
+                    ?? new UnhandledRpcException("Unhandled exception has occurred. See InnerException for more details", e));
+                break;
+            case UnhandledExceptionPropagationBehavior.TransparentNoWrap:
+                FailCore(e);
+                break;
+        }
+    }
+
+    private void FailCore(Exception e)
+    {
         Callees.CompleteResponse(this, e, null);
     }
 

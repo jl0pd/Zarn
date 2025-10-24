@@ -96,7 +96,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             throw new ProtocolViolationException("Unknown error has occurred");
         }
 
-        return new ConnectionContext(stream, new Pools(_pools, request.Interfaces, response.Interfaces), Services);
+        return new ConnectionContext(stream, new Pools(_pools, request.Interfaces, response.Interfaces), _settings, Services);
     }
 
     public ValueTask DisposeAsync()

@@ -63,7 +63,7 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             throw new InvalidOperationException($"Connection with client failed due to error: {response.Error}");
         }
 
-        return new ConnectionContext(stream, new Pools(pools, response.Interfaces, request.Interfaces), Services);
+        return new ConnectionContext(stream, new Pools(pools, response.Interfaces, request.Interfaces), settings, Services);
     }
 
     public async ValueTask DisposeAsync()

@@ -20,20 +20,25 @@ internal sealed class ConnectionContext
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
     private readonly ConcurrentDictionary<Guid, InvokerState> _invokers = new();
     private readonly CalleesState _callees;
-    private readonly SemaphoreSlim _concurrentOperationsSemaphore = new(MaxConcurrentOperations, MaxConcurrentOperations);
-    private const int MaxConcurrentOperations = 100; // TODO: allow to configure
+    private readonly SemaphoreSlim _concurrentOperationsSemaphore;
+    private readonly int _maxConcurrentOperations;
 
     public Pools Pools { get; }
 
+    public RpcSettings Settings { get; }
+
     public BinarySerializationContext SerializationContext { get; }
 
-    public ConnectionContext(Stream stream, Pools pools, IServiceProvider services)
+    public ConnectionContext(Stream stream, Pools pools, RpcSettings settings, IServiceProvider services)
     {
         _stream = stream;
         _calleeServices = services;
         Pools = pools;
+        Settings = settings;
         SerializationContext = pools.SerializationContext; // keep it closer
-        _callees = new CalleesState(this, MaxConcurrentOperations);
+        _maxConcurrentOperations = settings.MaxConcurrentOperations;
+        _callees = new CalleesState(this, _maxConcurrentOperations);
+        _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
     }
 
     public InvokerBase GetInvoker(Type invokerType)
@@ -68,7 +73,7 @@ internal sealed class ConnectionContext
             invoker = factories[typeSlot].GetInvoker();
         }
         invoker.TypeSlot = typeSlot + 1;
-        invoker.State = new InvokerState(OperationId.GenObjectId(), this, MaxConcurrentOperations, _concurrentOperationsSemaphore);
+        invoker.State = new InvokerState(OperationId.GenObjectId(), this, _maxConcurrentOperations, _concurrentOperationsSemaphore);
         _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
         {
             const string message = "Multiple invokers with same id may not exist";
