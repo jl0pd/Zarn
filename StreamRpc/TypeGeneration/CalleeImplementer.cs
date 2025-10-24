@@ -17,6 +17,7 @@ internal static class CalleeImplementer
     private static readonly MethodInfo CalleeBase_WaitTaskT;
     private static readonly MethodInfo CalleeBase_WaitVoidTask;
     private static readonly MethodInfo CalleeBase_DispatchCore;
+    private static readonly MethodInfo CalleeBase_Fail;
     private static readonly ConstructorInfo ValueTask_Ctor_Task;
 
     static CalleeImplementer()
@@ -38,6 +39,7 @@ internal static class CalleeImplementer
         CalleeBase_WaitTaskT = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitTask))!;
         CalleeBase_WaitVoidTask = typeInfo.GetDeclaredMethod(nameof(CalleeBase.WaitVoidTask))!;
         CalleeBase_DispatchCore = typeInfo.GetDeclaredMethod(nameof(CalleeBase.DispatchCore))!;
+        CalleeBase_Fail = typeInfo.GetDeclaredMethod(nameof(CalleeBase.Fail))!;
         ValueTask_Ctor_Task = typeof(ValueTask).GetConstructor([typeof(Task)])!;
     }
 
@@ -72,10 +74,13 @@ internal static class CalleeImplementer
             {
                 case 0:
                     _0(ref argumentsReader);
-                    break;
+                    return;
                 case 1:
                     _1(ref argumentsReader);
-                    break;
+                    return;
+                default:
+                    ThrowHelper.Fail("errMsg");
+                    return;
             }
         }
         */
@@ -105,6 +110,10 @@ internal static class CalleeImplementer
             il.Emit(OpCodes.Call, stubs[i]);
             il.Emit(OpCodes.Ret);
         }
+
+        il.Emit(OpCodes.Ldstr, "Invalid method slot was passed for invoke");
+        il.Emit(OpCodes.Call, ImplementerCommon.ThrowHelper_Fail);
+        il.Emit(OpCodes.Ret);
     }
 
     private static MethodBuilder[] ImplementInvokeStubs(TypeBuilder typeBuilder, Type interfaceType, FieldBuilder implField)
@@ -129,7 +138,14 @@ internal static class CalleeImplementer
             var arg1 = base.ParseArgument<arg1Type>(ref argumentsReader);
             var res = _impl.InterfaceMethod(arg1);
 
-            Complete(res);
+            try
+            {
+                Complete(res);
+            }
+            catch (Exception e)
+            {
+                Fail(e);
+            }
         }
         */
 
@@ -138,64 +154,99 @@ internal static class CalleeImplementer
                                                      typeof(void),
                                                      [typeof(SequenceReader<byte>).MakeByRefType()]);
 
+        var parameters = interfaceMethod.GetParameters();
         var resultType = ImplementerCommon.GetValueType(interfaceMethod.ReturnType);
 
         var il = methodBuilder.GetILGenerator();
 
-        il.Emit(OpCodes.Ldarg_0);
+        var retLabel = il.DefineLabel();
+        var exLocal = il.DeclareLocal(typeof(Exception));
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, implField);
+        // evaluation stack must be empty when entering exception block, so free it and restore when we're inside
+        var locals = new List<LocalBuilder>(parameters.Length);
 
         foreach (var param in interfaceMethod.GetParameters())
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, CalleeBase_ParseArgument.MakeGenericMethod(param.ParameterType));
+
+            var local = il.DeclareLocal(param.ParameterType);
+            il.Emit(OpCodes.Stloc, local);
+            locals.Add(local);
         }
 
-        il.Emit(OpCodes.Callvirt, interfaceMethod);
+        // try
+        il.BeginExceptionBlock();
+        {
+            il.Emit(OpCodes.Ldarg_0);
 
-        if (interfaceMethod.ReturnType == typeof(void))
-        {
-            il.Emit(OpCodes.Call, CalleeBase_CompleteVoid);
-        }
-        else if (interfaceMethod.ReturnType == typeof(ValueTask))
-        {
-            il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
-        }
-        else if (interfaceMethod.ReturnType == typeof(Task))
-        {
-            // WaitVoidTask(new ValueTask(res));
-            il.Emit(OpCodes.Newobj, ValueTask_Ctor_Task);
-            il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
-        }
-        else if (interfaceMethod.ReturnType.IsGenericType)
-        {
-            var typeDef = interfaceMethod.ReturnType.GetGenericTypeDefinition();
-            if (typeDef == typeof(ValueTask<>))
+            // this._impl
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, implField);
+
+            foreach (var local in locals)
             {
-                il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
+                il.Emit(OpCodes.Ldloc, local);
             }
-            else if (typeDef == typeof(Task<>))
+
+            il.Emit(OpCodes.Callvirt, interfaceMethod);
+
+            if (interfaceMethod.ReturnType == typeof(void))
             {
-                // WaitTask<T>(new ValueTask<T>(res));
-                var ctor = typeof(ValueTask<>)
-                            .MakeGenericType(resultType)
-                            .GetConstructor([typeof(Task<>).MakeGenericType(resultType)])!;
-                il.Emit(OpCodes.Newobj, ctor);
-                il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
+                il.Emit(OpCodes.Call, CalleeBase_CompleteVoid);
+            }
+            else if (interfaceMethod.ReturnType == typeof(ValueTask))
+            {
+                il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
+            }
+            else if (interfaceMethod.ReturnType == typeof(Task))
+            {
+                // WaitVoidTask(new ValueTask(res));
+                il.Emit(OpCodes.Newobj, ValueTask_Ctor_Task);
+                il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
+            }
+            else if (interfaceMethod.ReturnType.IsGenericType)
+            {
+                var typeDef = interfaceMethod.ReturnType.GetGenericTypeDefinition();
+                if (typeDef == typeof(ValueTask<>))
+                {
+                    il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
+                }
+                else if (typeDef == typeof(Task<>))
+                {
+                    // WaitTask<T>(new ValueTask<T>(res));
+                    var ctor = typeof(ValueTask<>)
+                                .MakeGenericType(resultType)
+                                .GetConstructor([typeof(Task<>).MakeGenericType(resultType)])!;
+                    il.Emit(OpCodes.Newobj, ctor);
+                    il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
+                }
+                else
+                {
+                    il.Emit(OpCodes.Call, CalleeBase_CompleteT.MakeGenericMethod(resultType));
+                }
             }
             else
             {
                 il.Emit(OpCodes.Call, CalleeBase_CompleteT.MakeGenericMethod(resultType));
             }
-        }
-        else
-        {
-            il.Emit(OpCodes.Call, CalleeBase_CompleteT.MakeGenericMethod(resultType));
+            il.Emit(OpCodes.Leave, retLabel);
         }
 
+        // catch(Exception e) { Fail(e); }
+        il.BeginCatchBlock(typeof(Exception));
+        {
+            il.Emit(OpCodes.Stloc, exLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Call, CalleeBase_Fail);
+
+            il.Emit(OpCodes.Leave, retLabel);
+        }
+        il.EndExceptionBlock();
+
+        il.MarkLabel(retLabel);
         il.Emit(OpCodes.Ret);
 
         return methodBuilder;

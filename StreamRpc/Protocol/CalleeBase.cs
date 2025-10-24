@@ -38,7 +38,9 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         }
         catch (Exception ex)
         {
-            Fail(ex);
+            // Exceptions generated from `Impl` are handled inside `InvokeStub#N` without wrapping.
+            // Catch exception here to avoid overhead inside `ParseArgument` and `DispatchCore`
+            Fail(new RpcInfrastructureException(ex));
         }
     }
 
@@ -68,7 +70,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         return value;
     }
 
-    private void Fail(Exception e)
+    internal protected void Fail(Exception e)
     {
         Callees.CompleteResponse(this, e, null);
     }

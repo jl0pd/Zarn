@@ -15,6 +15,8 @@ internal static class ImplementerCommon
     public static readonly MethodInfo MethodBase_GetMethodFromHandleT
             = typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle), typeof(RuntimeTypeHandle)])!;
 
+    public static readonly MethodInfo ThrowHelper_Fail = typeof(ThrowHelper).GetMethod(nameof(ThrowHelper.Fail))!;
+
     public static void CreateIgnoreAccessChecks(ModuleBuilder module)
     {
         const string attrName = "System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute";
