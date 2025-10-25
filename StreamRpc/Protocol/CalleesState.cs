@@ -74,10 +74,6 @@ internal sealed class CalleesState(ConnectionContext connection, int maxConcurre
 
         Pools.Return(Interlocked.Exchange(ref callee.Cts, null));
 
-        var @interface = callee.ImplementedInterface;
-        if (!@interface.IsGenericType)
-        {
-            Pools.CalleeFactoryLookup[@interface].Return(callee);
-        }
+        callee.Factory.Return(callee);
     }
 }

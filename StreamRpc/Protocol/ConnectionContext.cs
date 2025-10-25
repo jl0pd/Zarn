@@ -238,6 +238,7 @@ internal sealed class ConnectionContext
         var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
         Type calleeType;
         CalleeBase callee;
+        var factory = Pools.CalleeFactories[typeSlot];
         if (options.HasFlag(MessageOptions.GenericType))
         {
             int argsCount = SerializationContext.Deserialize<int>(ref reader);
@@ -247,13 +248,13 @@ internal sealed class ConnectionContext
                 typeArgs[i] = SerializationContext.Deserialize<Type>(ref reader);
             }
 
-            calleeType = Pools.CalleeFactories[typeSlot].ImplementationType.MakeGenericType(typeArgs);
+            calleeType = factory.ImplementationType.MakeGenericType(typeArgs);
             callee = (CalleeBase)Activator.CreateInstance(calleeType)!;
         }
         else
         {
-            calleeType = Pools.CalleeFactories[typeSlot].InterfaceType;
-            callee = Pools.CalleeFactories[typeSlot].GetCallee();
+            calleeType = factory.InterfaceType;
+            callee = factory.GetCallee();
         }
 
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
@@ -269,6 +270,7 @@ internal sealed class ConnectionContext
             callee.GenericMethodArgs = typeArgs;
         }
 
+        callee.Factory = factory;
         callee.Callees = _callees;
         callee.OperationId = operationId;
         if (!_callees.Register(callee))

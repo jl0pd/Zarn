@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using StreamRpc.Serialization;
+using StreamRpc.TypeGeneration;
 
 namespace StreamRpc.Protocol;
 
@@ -21,7 +22,10 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     internal long ReaderOffset { get; set; }
 
     internal CancellationTokenSource? Cts;
+
     internal CalleesState Callees { get; set; } = null!;
+
+    internal CalleeFactory Factory { get; set; } = null!;
 
     internal int MethodSlot { get; set; }
 

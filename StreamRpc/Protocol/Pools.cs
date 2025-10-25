@@ -12,14 +12,12 @@ internal sealed class Pools
     {
         SerializationContext = serializationContext;
         CalleeFactories = [];
-        CalleeFactoryLookup = null!;
         InvokerFactories = [];
     }
 
     public Pools(Pools pools, InterfaceDescriptor[] calleeDescriptors, InterfaceDescriptor[] InvokerDescriptors)
     {
         CalleeFactories = calleeDescriptors.Select(x => new CalleeFactory(x)).ToArray();
-        CalleeFactoryLookup = CalleeFactories.ToDictionary(x => x.InterfaceType);
 
         InvokerFactories = InvokerDescriptors.Select(x => new InvokerFactory(x)).ToArray();
 
@@ -31,8 +29,6 @@ internal sealed class Pools
 
     public CalleeFactory[] CalleeFactories { get; }
     public InvokerFactory[] InvokerFactories { get; }
-
-    public Dictionary<Type, CalleeFactory> CalleeFactoryLookup { get; }
 
     public BinarySerializationContext SerializationContext { get; }
 
