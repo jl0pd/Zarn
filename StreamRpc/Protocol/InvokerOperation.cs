@@ -30,6 +30,7 @@ internal abstract class InvokerOperation
 
     private Task? _waitForFreeOperationSlot;
     private Action? _startCoreAction;
+    private Action? _onRemoteIdReadyAction;
 
     public Pools? Reset()
     {
@@ -50,6 +51,7 @@ internal abstract class InvokerOperation
         SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
         SerializationContext.Serialize(ExecuteRequestOptions.None, writer);
         writer.Reserve(OperationId.Size);
+        writer.Reserve(ObjectId.Size);
         RequestWriter = writer;
     }
 
@@ -65,17 +67,27 @@ internal abstract class InvokerOperation
         CancellationToken.ThrowIfCancellationRequested();
         Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
 
-        var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
-
-        if (waitTask.IsCompleted)
+        var ridTask = Invoker.RemoteId;
+        if (ridTask.IsCompleted)
         {
-            waitTask.GetAwaiter().GetResult(); // throw exception is there's any
-            StartCore();
+            ridTask.GetAwaiter().GetResult();
+
+            var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
+            if (waitTask.IsCompleted)
+            {
+                waitTask.GetAwaiter().GetResult(); // throw exception is there's any
+                StartCore();
+            }
+            else
+            {
+                _waitForFreeOperationSlot = waitTask;
+                waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+            }
         }
         else
         {
-            _waitForFreeOperationSlot = waitTask;
-            waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+            ridTask.GetAwaiter().UnsafeOnCompleted(_onRemoteIdReadyAction ??= StartCommon);
+            Invoker.BeginAcquireRemoteId();
         }
     }
 
@@ -96,7 +108,7 @@ internal abstract class InvokerOperation
             }
         }
 
-        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
+        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { } && Invoker.RemoteId.IsCompleted);
 
         Invoker.RegisterOperation(this);
 
@@ -109,6 +121,9 @@ internal abstract class InvokerOperation
 
         MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions)),
                             new OperationId(Invoker.Id, Token));
+
+        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions) + OperationId.Size),
+                            Invoker.RemoteId.GetAwaiter().GetResult());
 
         if (CancellationToken.CanBeCanceled)
         {

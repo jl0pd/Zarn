@@ -7,10 +7,12 @@ namespace StreamRpc.Protocol;
 
 internal readonly record struct ObjectId(Guid Id)
 {
+    public const int Size = 16;
+
     public static ObjectId GenObjectId()
     {
-        Span<byte> bytes = stackalloc byte[OperationId.Size];
-        Random.Shared.NextBytes(bytes[..(OperationId.Size - sizeof(short))]);
+        Span<byte> bytes = stackalloc byte[Size];
+        Random.Shared.NextBytes(bytes[..(Size - sizeof(short))]);
         return MemoryMarshal.Read<ObjectId>(bytes);
     }
 

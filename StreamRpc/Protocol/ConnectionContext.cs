@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using StreamRpc.Serialization;
+using StreamRpc.TypeGeneration;
 using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
@@ -20,6 +21,7 @@ internal sealed class ConnectionContext
     private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
+    private readonly ConcurrentDictionary<ObjectId, (CalleeFactory Factory, object Instance)> _trackedObjects = new();
 
     public Pools Pools { get; }
 
@@ -61,17 +63,24 @@ internal sealed class ConnectionContext
             throw new KeyNotFoundException("Unable to find implementation for type" + invokerType);
         }
 
+        Type[] genericArgs = [];
         InvokerBase invoker;
         if (invokerType.IsConstructedGenericType)
         {
-            invoker = factories[typeSlot].GetInvoker(invokerType.GetGenericArguments());
+            genericArgs = invokerType.GetGenericArguments();
+            invoker = factories[typeSlot].GetInvoker(genericArgs);
         }
         else
         {
             invoker = factories[typeSlot].GetInvoker();
         }
-        invoker.TypeSlot = typeSlot + 1;
-        invoker.State = new InvokerState(this, _maxConcurrentOperations, _concurrentOperationsSemaphore);
+        
+        invoker.State = new InvokerState(this,
+                                         typeSlot + 1,
+                                         genericArgs,
+                                         _maxConcurrentOperations,
+                                         _concurrentOperationsSemaphore);
+        
         _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
         {
             const string message = "Multiple invokers with same id may not exist";
@@ -188,6 +197,9 @@ internal sealed class ConnectionContext
         var type = (MessageType)message.FirstChunkRequired.Array[0];
         switch (type)
         {
+            case MessageType.Error:
+                throw ThrowHelper.Fail("Error message received");
+
             case MessageType.ExecuteRequest:
                 HandleExecuteRequest(message);
                 break;
@@ -197,10 +209,60 @@ internal sealed class ConnectionContext
             case MessageType.ExecuteCancel:
                 HandleExecuteCancel(message);
                 break;
+            case MessageType.GetRemoteIdRequest:
+                HandleGetRemoteIdRequest(message);
+                break;
+            case MessageType.GetRemoteIdResponse:
+                HandleGetRemoteIdResponse(message);
+                break;
             default:
                 Debug.Fail("Invalid message");
                 break;
         }
+    }
+
+    private void HandleGetRemoteIdResponse(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
+        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
+
+        _invokers[invokerId].SetRemoteId(remoteId);
+
+        Pools.Return(message);
+    }
+
+    private void HandleGetRemoteIdRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
+        var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
+        var genericArgs = SerializationContext.Deserialize<Type[]>(ref reader);
+
+        var factory = Pools.CalleeFactories[typeSlot];
+        var calleeType = genericArgs.Length > 0
+            ? factory.ImplementationType.MakeGenericType(genericArgs)
+            : factory.InterfaceType;
+
+        var serviceInstance = _calleeServices.GetService(calleeType)
+            ?? throw ThrowHelper.Unreachable; // service must be registered
+
+        var remoteId = ObjectId.GenObjectId();
+        _trackedObjects.AddOrUpdate(remoteId, (factory, serviceInstance), (k, v) =>
+        {
+            throw ThrowHelper.Unreachable;
+        });
+
+        message.Reset();
+        message.Reserve(PackedInt.MaxSize);
+        SerializationContext.Serialize(MessageType.GetRemoteIdResponse, message);
+        SerializationContext.Serialize(invokerId, message);
+        SerializationContext.Serialize(remoteId, message);
+        Dispatch(message);
     }
 
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
@@ -225,39 +287,15 @@ internal sealed class ConnectionContext
         reader.Advance(2);
 
         var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
-        var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
-        Type calleeType;
-        CalleeBase callee;
-        var factory = Pools.CalleeFactories[typeSlot];
-        if (options.HasFlag(ExecuteRequestOptions.GenericType))
-        {
-            int argsCount = SerializationContext.Deserialize<int>(ref reader);
-            var typeArgs = new Type[argsCount];
-            for (int i = 0; i < typeArgs.Length; i++)
-            {
-                typeArgs[i] = SerializationContext.Deserialize<Type>(ref reader);
-            }
+        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
 
-            calleeType = factory.ImplementationType.MakeGenericType(typeArgs);
-            callee = (CalleeBase)Activator.CreateInstance(calleeType)!;
-        }
-        else
-        {
-            calleeType = factory.InterfaceType;
-            callee = factory.GetCallee();
-        }
+        var (factory, instance) = _trackedObjects[remoteId];
 
+        CalleeBase callee = factory.GetCallee();
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
         if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
         {
-            int argsCount = SerializationContext.Deserialize<int>(ref reader);
-            var typeArgs = new Type[argsCount];
-            for (int i = 0; i < typeArgs.Length; i++)
-            {
-                typeArgs[i] = SerializationContext.Deserialize<Type>(ref reader);
-            }
-
-            callee.GenericMethodArgs = typeArgs;
+            callee.GenericMethodArgs = SerializationContext.Deserialize<Type[]>(ref reader);
         }
 
         callee.Factory = factory;
@@ -272,7 +310,7 @@ internal sealed class ConnectionContext
             throw new NotImplementedException();
         }
         callee.Arguments = message;
-        callee.Impl = _calleeServices.GetService(calleeType) ?? throw new InvalidOperationException();
+        callee.Impl = instance;
         callee.ReaderOffset = reader.Consumed;
         callee.Cts = Pools.GetCts();
 
@@ -303,6 +341,11 @@ internal sealed class ConnectionContext
         Debug.Assert(reader.Remaining == 0);
 
         Pools.Return(message);
+    }
+
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header)
+    {
+        Dispatch(header, null);
     }
 
     public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)

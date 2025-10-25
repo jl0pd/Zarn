@@ -86,4 +86,15 @@ public sealed class SimpleRpcCallTests : RpcTestsBase
     {
         inst.SkipGreeting("John");
     });
+
+    [Fact]
+    public Task SameObjectIsUsed() => RunConnectToServerTest<IStorage, Storage>(async (inst) =>
+    {
+        var value = Guid.NewGuid().ToString("n");
+        await inst.StoreAsync(value);
+
+        var result = await inst.GetStoredValue();
+
+        Assert.Equal(value, result);
+    });
 }

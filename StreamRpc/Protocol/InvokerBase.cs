@@ -11,8 +11,6 @@ internal abstract class InvokerBase
 
     internal MethodInfo?[] MethodSlots { get; set; } = [];
 
-    internal protected int TypeSlot { get; set; }
-
     internal protected int GetMethodSlot(MethodInfo method)
     {
         Debug.Assert(method.IsGenericMethodDefinition || !method.IsGenericMethod);

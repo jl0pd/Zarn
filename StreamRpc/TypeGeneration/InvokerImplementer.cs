@@ -16,7 +16,6 @@ internal static class InvokerImplementer
     private static readonly MethodInfo InvokerBase_SynchronousWaitValueResultT;
     private static readonly MethodInfo InvokerBase_SynchronousWaitVoidValueResult;
     private static readonly MethodInfo InvokerBase_GetMethodSlot;
-    private static readonly MethodInfo InvokerBase_GetTypeSlot;
     private static readonly MethodInfo InvokerOperation_SerializeArgT;
     private static readonly MethodInfo InvokerOperation_SetCancellationToken;
     private static readonly MethodInfo InvokerOperationT_Start;
@@ -42,7 +41,6 @@ internal static class InvokerImplementer
         InvokerBase_SynchronousWaitValueResultT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitValueResult))!;
         InvokerBase_SynchronousWaitVoidValueResult = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidValueResult))!;
         InvokerBase_GetMethodSlot = invokerBase.GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
-        InvokerBase_GetTypeSlot = invokerBase.GetDeclaredProperty(nameof(InvokerBase.TypeSlot))!.GetGetMethod(true)!;
 
         InvokerOperation_SerializeArgT = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.SerializeArg))!;
         InvokerOperation_SetCancellationToken = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.CancellationToken))!.GetSetMethod()!;
@@ -90,14 +88,6 @@ internal static class InvokerImplementer
         if (methodHasCancellationTokenArg)
         {
             op.CancellationToken = argCancellationToken;
-        }
-
-        op.SerializeArg<int>(base.TypeSlot);
-        if (typeIsGeneric)
-        {
-            op.MessageOptions |= MessageOptions.GenericType;
-            op.SerializeArg<Type>(typeArg[0]);
-            op.SerializeArg<Type>(typeArg[N]);
         }
 
         op.SerializeArg<int>(base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod)));
@@ -165,17 +155,6 @@ internal static class InvokerImplementer
             il.Emit(OpCodes.Ldloc, opLocal);
             il.Emit(OpCodes.Ldarg, cancellationTokenParameter.Position + 1);
             il.Emit(OpCodes.Call, InvokerOperation_SetCancellationToken);
-        }
-
-        // base.SerializationContext.Serialize(base.TypeSlot, bufferWriter);
-        il.Emit(OpCodes.Ldloc, opLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, InvokerBase_GetTypeSlot);
-        il.Emit(OpCodes.Call, InvokerOperation_SerializeArgT.MakeGenericMethod(typeof(int)));
-
-        if (interfaceMethod.DeclaringType!.IsGenericType)
-        {
-            throw new NotImplementedException();
         }
 
         // base.SerializationContext.Serialize(base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod)), bufferWriter);
