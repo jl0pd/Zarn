@@ -16,7 +16,7 @@ internal sealed class ConnectionContext
     private readonly IServiceProvider _calleeServices;
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
-    private readonly ConcurrentDictionary<Guid, InvokerState> _invokers = new();
+    private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = new();
     private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
@@ -71,7 +71,7 @@ internal sealed class ConnectionContext
             invoker = factories[typeSlot].GetInvoker();
         }
         invoker.TypeSlot = typeSlot + 1;
-        invoker.State = new InvokerState(OperationId.GenObjectId(), this, _maxConcurrentOperations, _concurrentOperationsSemaphore);
+        invoker.State = new InvokerState(this, _maxConcurrentOperations, _concurrentOperationsSemaphore);
         _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
         {
             const string message = "Multiple invokers with same id may not exist";

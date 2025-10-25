@@ -1,8 +1,26 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace StreamRpc.Protocol;
+
+internal readonly record struct ObjectId(Guid Id)
+{
+    public static ObjectId GenObjectId()
+    {
+        Span<byte> bytes = stackalloc byte[OperationId.Size];
+        Random.Shared.NextBytes(bytes[..(OperationId.Size - sizeof(short))]);
+        return MemoryMarshal.Read<ObjectId>(bytes);
+    }
+
+    public static bool IsValid(ObjectId id)
+    {
+        return Unsafe.Add(ref Unsafe.As<ObjectId, short>(ref id), 7) == 0;
+    }
+
+    public override string ToString() => Id.ToString("n");
+}
 
 [StructLayout(LayoutKind.Explicit, Size = Size)]
 internal readonly struct OperationId : IEquatable<OperationId>
@@ -18,7 +36,7 @@ internal readonly struct OperationId : IEquatable<OperationId>
     [field: FieldOffset(Size - sizeof(short))]
     public short Id { get; }
 
-    public Guid Target
+    public ObjectId Target
     {
         get
         {
@@ -26,7 +44,7 @@ internal readonly struct OperationId : IEquatable<OperationId>
             AsSpan().CopyTo(bytes);
             bytes[Size - 1] = 0;
             bytes[Size - 2] = 0;
-            return MemoryMarshal.Read<Guid>(bytes);
+            return MemoryMarshal.Read<ObjectId>(bytes);
         }
     }
 
@@ -34,22 +52,11 @@ internal readonly struct OperationId : IEquatable<OperationId>
 
     private ReadOnlySpan<byte> AsSpan() => MemoryMarshal.CreateReadOnlySpan(in _firstByte, Size);
 
-    public OperationId(Guid target, short id)
+    public OperationId(ObjectId target, short id)
     {
-        _asGuid = target;
+        Debug.Assert(ObjectId.IsValid(target));
+        _asGuid = target.Id;
         Id = id;
-    }
-
-    public static Guid GenObjectId()
-    {
-        Span<byte> bytes = stackalloc byte[Size];
-        Random.Shared.NextBytes(bytes[..(Size - sizeof(short))]);
-        return MemoryMarshal.Read<Guid>(bytes);
-    }
-
-    public static bool IsTargetValid(Guid id)
-    {
-        return Unsafe.Add(ref Unsafe.As<Guid, short>(ref id), 7) == 0;
     }
 
     public override string ToString()

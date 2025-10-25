@@ -3,9 +3,9 @@ using System.Diagnostics;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class InvokerState(Guid id, ConnectionContext context, int maxConcurrentOperations, SemaphoreSlim semaphore)
+internal sealed class InvokerState(ConnectionContext context, int maxConcurrentOperations, SemaphoreSlim semaphore)
 {
-    public Guid Id { get; } = id;
+    public ObjectId Id { get; } = ObjectId.GenObjectId();
 
     public ConnectionContext Connection { get; } = context;
 
