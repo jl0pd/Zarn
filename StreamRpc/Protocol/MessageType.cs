@@ -6,19 +6,19 @@ namespace StreamRpc.Protocol;
 
 internal enum MessageType : byte
 {
-    HandshakeRequest = 0,
-    HandshakeResponse = 1,
+    Error = 0,
 
-    ExecuteRequest = 2,
-    ExecuteResponse = 3,
-    ExecuteCancel = 4,
+    HandshakeRequest = 1,
+    HandshakeResponse = 2,
+
+    ExecuteRequest = 3,
+    ExecuteResponse = 4,
+    ExecuteCancel = 5,
 }
 
 internal abstract class MessageBase
 {
     public abstract MessageType Type { get; }
-
-    public MessageOptions Options { get; set; }
 
     protected abstract void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext);
 
@@ -27,7 +27,6 @@ internal abstract class MessageBase
     public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
     {
         writer.Reserve(PackedInt.MaxSize);
-        serializationContext.Serialize(Options, writer);
         serializationContext.Serialize(Type, writer);
         SerializeCore(writer, serializationContext);
     }
@@ -46,20 +45,40 @@ internal abstract class MessageBase
 
     public static T ReadMessage<T>(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext) where T : MessageBase
     {
-        var options = serializationContext.Deserialize<MessageOptions>(ref reader);
         var type = serializationContext.Deserialize<MessageType>(ref reader);
         MessageBase message = type switch
         {
+            MessageType.Error => new ErrorMessage(),
             MessageType.HandshakeRequest => new HandshakeRequestMessage(),
             MessageType.HandshakeResponse => new HandshakeResponseMessage(),
             _ => throw new InvalidDataException(),
         };
-        message.Options = options;
         Debug.Assert(message.Type == type);
         message.Deserialize(ref reader, serializationContext);
         Debug.Assert(reader.Remaining == 0);
 
         return (T)message;
+    }
+}
+
+internal sealed class ErrorMessage : MessageBase
+{
+    public override MessageType Type => MessageType.Error;
+
+    public ErrorCode ErrorCode { get; set; }
+
+    public string? DetailedMessage { get; set; }
+
+    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    {
+        ErrorCode = serializationContext.Deserialize<ErrorCode>(ref reader);
+        DetailedMessage = serializationContext.Deserialize<string>(ref reader);
+    }
+
+    protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
+    {
+        serializationContext.Serialize(ErrorCode, writer);
+        serializationContext.Serialize(DetailedMessage, writer);
     }
 }
 
@@ -106,9 +125,9 @@ internal sealed class HandshakeResponseMessage : MessageBase
 {
     public override MessageType Type => MessageType.HandshakeResponse;
 
-    public bool IsSuccess => Error == ErrorCode.Ok && !Options.HasFlag(MessageOptions.Success);
+    public bool IsSuccess => ErrorCode == ErrorCode.Ok;
 
-    public ErrorCode Error { get; set; }
+    public ErrorCode ErrorCode { get; set; }
 
     public bool IsLittleEndian { get; set; }
 
@@ -118,7 +137,7 @@ internal sealed class HandshakeResponseMessage : MessageBase
 
     protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
     {
-        Error = serializationContext.Deserialize<ErrorCode>(ref reader);
+        ErrorCode = serializationContext.Deserialize<ErrorCode>(ref reader);
         IsLittleEndian = serializationContext.Deserialize<bool>(ref reader);
         ChosenCompression = serializationContext.Deserialize<string?>(ref reader);
         Interfaces = serializationContext.Deserialize<InterfaceDescriptor[]>(ref reader);
@@ -126,7 +145,7 @@ internal sealed class HandshakeResponseMessage : MessageBase
 
     protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
     {
-        serializationContext.Serialize(Error, writer);
+        serializationContext.Serialize(ErrorCode, writer);
         serializationContext.Serialize(IsLittleEndian, writer);
         serializationContext.Serialize(ChosenCompression, writer);
         serializationContext.Serialize(Interfaces, writer);

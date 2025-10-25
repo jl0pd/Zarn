@@ -24,7 +24,7 @@ internal abstract class InvokerOperation
 
     public ChunkedArrayPoolBufferWriter<byte>? RequestWriter { get; set; }
 
-    public MessageOptions RequestOptions { get; set; }
+    public ExecuteRequestOptions RequestOptions { get; set; }
 
     private int _isResultSet = 0;
 
@@ -47,8 +47,8 @@ internal abstract class InvokerOperation
         SerializationContext = Connection.SerializationContext;
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageOptions.None, writer);
         SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
+        SerializationContext.Serialize(ExecuteRequestOptions.None, writer);
         writer.Reserve(OperationId.Size);
         RequestWriter = writer;
     }
@@ -103,8 +103,12 @@ internal abstract class InvokerOperation
         var writer = RequestWriter;
         RequestWriter = null;
         var ar = writer.FirstChunkRequired.Array;
-        var opIdStart = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageOptions) + sizeof(MessageType));
-        MemoryMarshal.Write(opIdStart, new OperationId(Invoker.Id, Token));
+
+        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType)),
+                            RequestOptions);
+
+        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions)),
+                            new OperationId(Invoker.Id, Token));
 
         if (CancellationToken.CanBeCanceled)
         {
@@ -114,7 +118,7 @@ internal abstract class InvokerOperation
             }, this);
         }
 
-        Connection.Dispatch(RequestOptions, writer, null);
+        Connection.Dispatch(writer, null);
     }
 
     public void Complete(ref SequenceReader<byte> responseBody)
@@ -142,10 +146,9 @@ internal abstract class InvokerOperation
         Debug.Assert(Connection is { } && SerializationContext is { } && Invoker is { });
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageOptions.None, writer);
         SerializationContext.Serialize(MessageType.ExecuteCancel, writer);
         SerializationContext.Serialize(new OperationId(Invoker.Id, Token), writer);
-        Connection.Dispatch(MessageOptions.None, writer, null);
+        Connection.Dispatch(writer, null);
     }
 }
 

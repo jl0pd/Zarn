@@ -8,13 +8,11 @@ namespace StreamRpc.Protocol;
 internal sealed class ConnectionContext
 {
     private readonly record struct OutputMessage(
-                                        MessageOptions Options,
                                         int Length,
                                         ChunkedArrayPoolBufferWriter<byte> Header,
                                         ChunkedArrayPoolBufferWriter<byte>? Body);
 
     private readonly Stream _stream;
-    private readonly MessageOptions _commonOptions;
     private readonly IServiceProvider _calleeServices;
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
@@ -98,11 +96,6 @@ internal sealed class ConnectionContext
 
             while (_outputMessages.TryDequeue(out var msg))
             {
-                if (_commonOptions.HasFlag(MessageOptions.Compressed))
-                {
-                    throw new NotImplementedException();
-                }
-
                 int chunkId = 0;
                 foreach (var chunk in msg.Header)
                 {
@@ -113,8 +106,6 @@ internal sealed class ConnectionContext
                         int skipBytes = PackedInt.MaxSize - msgBytesLength;
                         int written = PackedInt.Write(msg.Length - skipBytes, chunk.Array.AsSpan(skipBytes));
                         Debug.Assert(written == msgBytesLength);
-
-                        chunk.Array[PackedInt.MaxSize] = (byte)(msg.Options | _commonOptions | MessageOptions.LastChunk);
                         memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
                     }
                     else
@@ -194,8 +185,7 @@ internal sealed class ConnectionContext
 
     private void HandleMessage(ChunkedArrayPoolBufferWriter<byte> message)
     {
-        Debug.Assert(((MessageOptions)message.FirstChunkRequired.Array[0] & MessageOptions.ReservedMask) == 0);
-        var type = (MessageType)message.FirstChunkRequired.Array[1];
+        var type = (MessageType)message.FirstChunkRequired.Array[0];
         switch (type)
         {
             case MessageType.ExecuteRequest:
@@ -216,7 +206,7 @@ internal sealed class ConnectionContext
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
-        reader.Advance(2);
+        reader.Advance(1);
 
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
@@ -230,7 +220,7 @@ internal sealed class ConnectionContext
     private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
-        var options = (MessageOptions)reader.UnreadSpan[0];
+        var options = (ExecuteRequestOptions)reader.UnreadSpan[1];
 
         reader.Advance(2);
 
@@ -239,7 +229,7 @@ internal sealed class ConnectionContext
         Type calleeType;
         CalleeBase callee;
         var factory = Pools.CalleeFactories[typeSlot];
-        if (options.HasFlag(MessageOptions.GenericType))
+        if (options.HasFlag(ExecuteRequestOptions.GenericType))
         {
             int argsCount = SerializationContext.Deserialize<int>(ref reader);
             var typeArgs = new Type[argsCount];
@@ -258,7 +248,7 @@ internal sealed class ConnectionContext
         }
 
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
-        if (options.HasFlag(MessageOptions.GenericMethod))
+        if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
         {
             int argsCount = SerializationContext.Deserialize<int>(ref reader);
             var typeArgs = new Type[argsCount];
@@ -298,8 +288,8 @@ internal sealed class ConnectionContext
 
         var invoker = _invokers[opId.Target];
 
-        var options = (MessageOptions)message.FirstChunkRequired.Array[0];
-        if (options.HasFlag(MessageOptions.Success))
+        var options = (ExecuteResponseOptions)message.FirstChunkRequired.Array[1];
+        if (options.HasFlag(ExecuteResponseOptions.Success))
         {
             invoker.Complete(opId.Id, ref reader);
         }
@@ -315,7 +305,7 @@ internal sealed class ConnectionContext
         Pools.Return(message);
     }
 
-    public void Dispatch(MessageOptions options, ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
     {
         long length = header.TotalLength;
         if (body is { })
@@ -323,7 +313,7 @@ internal sealed class ConnectionContext
             length += body.TotalLength;
         }
 
-        _outputMessages.Enqueue(new OutputMessage(options, checked((int)length), header, body));
+        _outputMessages.Enqueue(new OutputMessage(checked((int)length), header, body));
         _outputMessagesEvent.Set();
     }
 }
