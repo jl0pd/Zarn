@@ -12,7 +12,7 @@ internal enum ExecuteRequestOptions : byte
 }
 
 [Flags]
-internal enum ExecuteResponseOptions
+internal enum ExecuteResponseOptions : byte
 {
     None = 0,
 

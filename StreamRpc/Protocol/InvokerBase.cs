@@ -65,3 +65,14 @@ internal abstract class InvokerBase
         }
     }
 }
+
+/// <summary>
+/// Specialized object that is created whenever remote proxy is used.
+/// </summary>
+internal abstract class FinalizableInvokerBase : InvokerBase
+{
+    ~FinalizableInvokerBase()
+    {
+        State?.OnCollected();
+    }
+}

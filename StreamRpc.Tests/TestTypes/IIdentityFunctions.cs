@@ -17,3 +17,12 @@ public sealed class IdentityFunctions : IIdentityFunctions
 
     public ValueTask<string> IdValueAsync(string value) => ValueTask.FromResult(value);
 }
+
+public sealed class FixedIdentityFunctions(string returnValue) : IIdentityFunctions
+{
+    public string Id(string value) => returnValue;
+
+    public Task<string> IdAsync(string value) => Task.FromResult(returnValue);
+
+    public ValueTask<string> IdValueAsync(string value) => ValueTask.FromResult(returnValue);
+}

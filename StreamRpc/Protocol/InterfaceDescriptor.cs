@@ -14,6 +14,7 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
                                            MethodSignature[] Methods)
 {
     private Type? _resolvedType;
+    private MethodInfo?[]? _resolvedMethods;
 
     public static InterfaceDescriptor FromType(Type type)
     {
@@ -39,6 +40,11 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
     }
 
     public MethodInfo?[] ResolveMethods()
+    {
+        return _resolvedMethods ??= ResolveMethodsCore();
+    }
+
+    private  MethodInfo?[] ResolveMethodsCore()
     {
         var type = ResolveType()
             ?? throw new InvalidOperationException("Unable to resolve methods for missing type: " + AssemblyQualifiedName);

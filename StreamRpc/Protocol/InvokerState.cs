@@ -43,6 +43,7 @@ internal sealed class InvokerState
         Debug.Assert(_remoteIdTcs is { });
         _remoteIdTcs.SetResult(id);
         _remoteIdTcs = null;
+        _remoteIdAcquiring = 1; // prevent `BeginAcquireRemoteId` from running when first method is called.
     }
 
     public void BeginAcquireRemoteId()
@@ -123,5 +124,10 @@ internal sealed class InvokerState
             _operations[freeSlot] = operation;
             _allocated++;
         }
+    }
+
+    public void OnCollected()
+    {
+        //Debug.Fail("not implemented");
     }
 }

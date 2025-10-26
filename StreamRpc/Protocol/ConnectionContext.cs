@@ -21,7 +21,7 @@ internal sealed class ConnectionContext
     private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
-    private readonly ConcurrentDictionary<ObjectId, (CalleeFactory Factory, object Instance)> _trackedObjects = new();
+    private readonly ConcurrentDictionary<ObjectId, (object Obj, CalleeFactory Factory)> _idToObj = new();
 
     public Pools Pools { get; }
 
@@ -36,19 +36,20 @@ internal sealed class ConnectionContext
         Pools = pools;
         Settings = settings;
         SerializationContext = pools.SerializationContext; // keep it closer
+        SerializationContext.SetConnection(this);
         _maxConcurrentOperations = settings.MaxConcurrentOperations;
         _callees = new CalleesState(this, _maxConcurrentOperations);
         _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
     }
 
-    public InvokerBase GetInvoker(Type invokerType)
+    public InvokerBase GetInvoker(Type invokerType, bool isReverseCall)
     {
         int typeSlot = -1;
         Type interfaceType = invokerType.IsConstructedGenericType
                                 ? invokerType.GetGenericTypeDefinition()
                                 : invokerType;
 
-        var factories = Pools.InvokerFactories;
+        var factories = isReverseCall ? Pools.ReverseCalleeFactories : Pools.InvokerFactories;
         for (int i = 0; i < factories.Length; i++)
         {
             if (factories[i].InterfaceType == interfaceType)
@@ -68,19 +69,19 @@ internal sealed class ConnectionContext
         if (invokerType.IsConstructedGenericType)
         {
             genericArgs = invokerType.GetGenericArguments();
-            invoker = factories[typeSlot].GetInvoker(genericArgs);
+            invoker = factories[typeSlot].GetInvoker(isReverseCall, genericArgs);
         }
         else
         {
-            invoker = factories[typeSlot].GetInvoker();
+            invoker = factories[typeSlot].GetInvoker(isReverseCall);
         }
-        
+
         invoker.State = new InvokerState(this,
                                          typeSlot + 1,
                                          genericArgs,
                                          _maxConcurrentOperations,
                                          _concurrentOperationsSemaphore);
-        
+
         _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
         {
             const string message = "Multiple invokers with same id may not exist";
@@ -89,6 +90,27 @@ internal sealed class ConnectionContext
         });
 
         return invoker;
+    }
+
+    public object GetInstance(ObjectId id) => _idToObj[id].Obj;
+
+    public CalleeFactory GetCalleeFactory(Type calleeType)
+    {
+        var simpleType = calleeType.IsConstructedGenericType
+                            ? calleeType.GetGenericTypeDefinition()
+                            : calleeType;
+
+        var factories = Pools.ReverseInvokerFactories;
+
+        foreach (var factory in factories)
+        {
+            if (factory.InterfaceType == simpleType)
+            {
+                return factory;
+            }
+        }
+
+        throw ThrowHelper.Unreachable;
     }
 
     public async Task SendMessages(CancellationToken cancellationToken)
@@ -251,11 +273,7 @@ internal sealed class ConnectionContext
         var serviceInstance = _calleeServices.GetService(calleeType)
             ?? throw ThrowHelper.Unreachable; // service must be registered
 
-        var remoteId = ObjectId.GenObjectId();
-        _trackedObjects.AddOrUpdate(remoteId, (factory, serviceInstance), (k, v) =>
-        {
-            throw ThrowHelper.Unreachable;
-        });
+        var remoteId = RegisterInstance(serviceInstance, factory);
 
         message.Reset();
         message.Reserve(PackedInt.MaxSize);
@@ -263,6 +281,17 @@ internal sealed class ConnectionContext
         SerializationContext.Serialize(invokerId, message);
         SerializationContext.Serialize(remoteId, message);
         Dispatch(message);
+    }
+
+    public ObjectId RegisterInstance(object serviceInstance, CalleeFactory factory)
+    {
+        var remoteId = ObjectId.GenObjectId();
+        while (!_idToObj.TryAdd(remoteId, (serviceInstance, factory)))
+        {
+            remoteId = ObjectId.GenObjectId();
+        }
+
+        return remoteId;
     }
 
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
@@ -289,7 +318,7 @@ internal sealed class ConnectionContext
         var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
         var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
 
-        var (factory, instance) = _trackedObjects[remoteId];
+        var (instance, factory) = _idToObj[remoteId];
 
         CalleeBase callee = factory.GetCallee();
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);

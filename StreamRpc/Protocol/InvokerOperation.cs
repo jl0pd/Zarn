@@ -116,14 +116,15 @@ internal abstract class InvokerOperation
         RequestWriter = null;
         var ar = writer.FirstChunkRequired.Array;
 
-        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType)),
-                            RequestOptions);
+        var targetSpan = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType));
+        MemoryMarshal.Write(targetSpan, RequestOptions);
 
-        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions)),
-                            new OperationId(Invoker.Id, Token));
+        targetSpan = targetSpan[1..];
 
-        MemoryMarshal.Write(ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions) + OperationId.Size),
-                            Invoker.RemoteId.GetAwaiter().GetResult());
+        MemoryMarshal.Write(targetSpan, new OperationId(Invoker.Id, Token));
+        targetSpan = targetSpan[OperationId.Size..];
+
+        MemoryMarshal.Write(targetSpan, Invoker.RemoteId.GetAwaiter().GetResult());
 
         if (CancellationToken.CanBeCanceled)
         {
@@ -133,7 +134,7 @@ internal abstract class InvokerOperation
             }, this);
         }
 
-        Connection.Dispatch(writer, null);
+        Connection.Dispatch(writer);
     }
 
     public void Complete(ref SequenceReader<byte> responseBody)

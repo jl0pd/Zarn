@@ -9,6 +9,7 @@ namespace StreamRpc.TypeGeneration;
 internal static class InvokerImplementer
 {
     private static readonly ConcurrentDictionary<Type, Lazy<Type>> s_types = [];
+    private static readonly ConcurrentDictionary<Type, Lazy<Type>> s_finalizableTypes = [];
     private static readonly ModuleBuilder s_module;
     private static readonly ConstructorInfo InvokerBase_ctor;
     private static readonly MethodInfo InvokerBase_CreateOperationT;
@@ -53,13 +54,19 @@ internal static class InvokerImplementer
 
     public static Type GetImplementation(Type interfaceType)
     {
-        return s_types.GetOrAdd(interfaceType, t => new Lazy<Type>(() => ImplementType(t))).Value;
+        return s_types.GetOrAdd(interfaceType, t => new Lazy<Type>(() => ImplementType(t, false))).Value;
     }
 
-    private static Type ImplementType(Type interfaceType)
+    public static Type GetFinalizableImplementation(Type interfaceType)
     {
-        var typeBuilder = s_module.DefineType(interfaceType.Name + "Impl", TypeAttributes.Sealed);
-        typeBuilder.SetParent(typeof(InvokerBase));
+        return s_finalizableTypes.GetOrAdd(interfaceType, t => new Lazy<Type>(() => ImplementType(t, true))).Value;
+    }
+
+    private static Type ImplementType(Type interfaceType, bool finalizable)
+    {
+        var typeBuilder = s_module.DefineType(interfaceType.Name + (finalizable ? "Proxy" : "") + "Impl",
+                                              TypeAttributes.Sealed);
+        typeBuilder.SetParent(finalizable ? typeof(FinalizableInvokerBase) : typeof(InvokerBase));
         typeBuilder.AddInterfaceImplementation(interfaceType);
 
         ImplementerCommon.DefineCtor(typeBuilder, InvokerBase_ctor);

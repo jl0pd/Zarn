@@ -1,4 +1,5 @@
 using System.Buffers;
+using StreamRpc.Protocol;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Tests.Serialization;
@@ -22,6 +23,8 @@ public sealed class BinarySerializationTests
     [InlineData(typeof(int))]
     [InlineData(typeof(List<>))]
     [InlineData(typeof(Dictionary<,>))]
+    [MemberData(nameof(GetObjectId))]
+    [MemberData(nameof(GetOperationId))]
     public void TestRoundtrip<T>(T value)
     {
         var settings = new RpcSettings();
@@ -38,4 +41,10 @@ public sealed class BinarySerializationTests
         Assert.Equal(0, reader.Remaining);
         Assert.Equal(value, result);
     }
+
+    public static IEnumerable<object[]> GetObjectId()
+        => [[ObjectId.GenObjectId()]];
+
+    public static IEnumerable<object[]> GetOperationId()
+        => [[new OperationId(ObjectId.GenObjectId(), 7)]];
 }

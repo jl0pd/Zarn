@@ -80,7 +80,7 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
         else if (serviceType.IsConstructedGenericType && serviceType.GetGenericTypeDefinition() == typeof(IRemote<>))
         {
             var genArg = serviceType.GetGenericArguments()[0];
-            var invoker = _connection.GetInvoker(genArg);
+            var invoker = _connection.GetInvoker(genArg, false);
 
             var remoteT = typeof(Remote<>).MakeGenericType(genArg);
             return Activator.CreateInstance(remoteT, [invoker]);

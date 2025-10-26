@@ -7,7 +7,13 @@ internal sealed class InvokerFactory
 {
     public Type InterfaceType { get; }
 
-    public Type ImplementationType { get; }
+    public Type ImplementationType
+        => _implementationType ??= InvokerImplementer.GetImplementation(InterfaceType);
+    private Type? _implementationType;
+
+    public Type FinalizableImplementationType
+        => _finalizableImplementationType ??= InvokerImplementer.GetFinalizableImplementation(InterfaceType);
+    private Type? _finalizableImplementationType;
 
     public MethodInfo?[] MethodsTable { get; }
 
@@ -15,19 +21,20 @@ internal sealed class InvokerFactory
     {
         InterfaceType = descriptor.ResolveType() ?? throw new InvalidOperationException("Unable to load interface: " + descriptor.AssemblyQualifiedName);
         MethodsTable = descriptor.ResolveMethods();
-        ImplementationType = InvokerImplementer.GetImplementation(InterfaceType);
     }
 
-    public InvokerBase GetInvoker()
+    public InvokerBase GetInvoker(bool finalizable)
     {
-        var invoker = (InvokerBase)Activator.CreateInstance(ImplementationType)!;
+        var type = finalizable ? FinalizableImplementationType : ImplementationType;
+        var invoker = (InvokerBase)Activator.CreateInstance(type)!;
         invoker.MethodSlots = MethodsTable;
         return invoker;
     }
 
-    public InvokerBase GetInvoker(Type[] genericArgs)
+    public InvokerBase GetInvoker(bool finalizable, Type[] genericArgs)
     {
-        var invoker = (InvokerBase)Activator.CreateInstance(ImplementationType.MakeGenericType(genericArgs))!;
+        var type = finalizable ? FinalizableImplementationType : ImplementationType;
+        var invoker = (InvokerBase)Activator.CreateInstance(type.MakeGenericType(genericArgs))!;
         invoker.MethodSlots = MethodsTable;
         return invoker;
     }
