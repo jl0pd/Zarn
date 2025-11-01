@@ -1,19 +1,64 @@
 using System.Buffers;
 using System.Diagnostics;
+using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class InvokerState(Guid id, ConnectionContext context, int maxConcurrentOperations, SemaphoreSlim semaphore)
+internal sealed class InvokerState
 {
-    public Guid Id { get; } = id;
+    public ObjectId Id { get; } = ObjectId.GenObjectId();
 
-    public ConnectionContext Connection { get; } = context;
+    public Task<ObjectId> RemoteId { get; }
+
+    public ConnectionContext Connection { get; }
 
     private int _allocated = 0;
-    private readonly short[] _operationIds = new short[maxConcurrentOperations];
-    private readonly InvokerOperation?[] _operations = new InvokerOperation[maxConcurrentOperations];
+    private readonly short[] _operationIds;
+    private readonly InvokerOperation?[] _operations;
     private short _lastOpId;
     private readonly Lock _lock = new();
+    private readonly int _typeSlot;
+    private readonly Type[] _genericArgs;
+    private readonly SemaphoreSlim _semaphore;
+    private TaskCompletionSource<ObjectId>? _remoteIdTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _remoteIdAcquiring = 0;
+
+    public InvokerState(ConnectionContext context,
+                        int typeSlot,
+                        Type[] genericArgs,
+                        int maxConcurrentOperations,
+                        SemaphoreSlim semaphore)
+    {
+        _semaphore = semaphore;
+        Connection = context;
+        _typeSlot = typeSlot;
+        _genericArgs = genericArgs;
+        _operationIds = new short[maxConcurrentOperations];
+        _operations = new InvokerOperation[maxConcurrentOperations];
+        RemoteId = _remoteIdTcs.Task;
+    }
+
+    public void SetRemoteId(ObjectId id)
+    {
+        Debug.Assert(_remoteIdTcs is { });
+        _remoteIdTcs.SetResult(id);
+        _remoteIdTcs = null;
+        _remoteIdAcquiring = 1; // prevent `BeginAcquireRemoteId` from running when first method is called.
+    }
+
+    public void BeginAcquireRemoteId()
+    {
+        if (Interlocked.Exchange(ref _remoteIdAcquiring, 1) == 0)
+        {
+            var writer = Connection.Pools.GetWriter();
+            writer.Reserve(PackedInt.MaxSize);
+            Connection.SerializationContext.Serialize(MessageType.GetRemoteIdRequest, writer);
+            Connection.SerializationContext.Serialize(Id, writer);
+            Connection.SerializationContext.Serialize(_typeSlot, writer);
+            Connection.SerializationContext.Serialize(_genericArgs, writer);
+            Connection.Dispatch(writer, null);
+        }
+    }
 
     public void Complete(short opId, Exception exception)
     {
@@ -44,7 +89,7 @@ internal sealed class InvokerState(Guid id, ConnectionContext context, int maxCo
         }
 
         Debug.Assert(op is { });
-        semaphore.Release();
+        _semaphore.Release();
         return op;
     }
 
@@ -60,7 +105,7 @@ internal sealed class InvokerState(Guid id, ConnectionContext context, int maxCo
 
     public Task WaitForFreeOperationSlot(CancellationToken cancellationToken)
     {
-        return semaphore.WaitAsync(cancellationToken);
+        return _semaphore.WaitAsync(cancellationToken);
     }
 
     public void RegisterOperation(InvokerOperation operation)
@@ -79,5 +124,10 @@ internal sealed class InvokerState(Guid id, ConnectionContext context, int maxCo
             _operations[freeSlot] = operation;
             _allocated++;
         }
+    }
+
+    public void OnCollected()
+    {
+        //Debug.Fail("not implemented");
     }
 }

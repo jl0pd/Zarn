@@ -24,12 +24,13 @@ internal abstract class InvokerOperation
 
     public ChunkedArrayPoolBufferWriter<byte>? RequestWriter { get; set; }
 
-    public MessageOptions RequestOptions { get; set; }
+    public ExecuteRequestOptions RequestOptions { get; set; }
 
     private int _isResultSet = 0;
 
     private Task? _waitForFreeOperationSlot;
     private Action? _startCoreAction;
+    private Action? _onRemoteIdReadyAction;
 
     public Pools? Reset()
     {
@@ -47,9 +48,10 @@ internal abstract class InvokerOperation
         SerializationContext = Connection.SerializationContext;
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageOptions.None, writer);
         SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
+        SerializationContext.Serialize(ExecuteRequestOptions.None, writer);
         writer.Reserve(OperationId.Size);
+        writer.Reserve(ObjectId.Size);
         RequestWriter = writer;
     }
 
@@ -65,17 +67,27 @@ internal abstract class InvokerOperation
         CancellationToken.ThrowIfCancellationRequested();
         Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
 
-        var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
-
-        if (waitTask.IsCompleted)
+        var ridTask = Invoker.RemoteId;
+        if (ridTask.IsCompleted)
         {
-            waitTask.GetAwaiter().GetResult(); // throw exception is there's any
-            StartCore();
+            ridTask.GetAwaiter().GetResult();
+
+            var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
+            if (waitTask.IsCompleted)
+            {
+                waitTask.GetAwaiter().GetResult(); // throw exception is there's any
+                StartCore();
+            }
+            else
+            {
+                _waitForFreeOperationSlot = waitTask;
+                waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+            }
         }
         else
         {
-            _waitForFreeOperationSlot = waitTask;
-            waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+            ridTask.GetAwaiter().UnsafeOnCompleted(_onRemoteIdReadyAction ??= StartCommon);
+            Invoker.BeginAcquireRemoteId();
         }
     }
 
@@ -96,15 +108,23 @@ internal abstract class InvokerOperation
             }
         }
 
-        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
+        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { } && Invoker.RemoteId.IsCompleted);
 
         Invoker.RegisterOperation(this);
 
         var writer = RequestWriter;
         RequestWriter = null;
         var ar = writer.FirstChunkRequired.Array;
-        var opIdStart = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageOptions) + sizeof(MessageType));
-        MemoryMarshal.Write(opIdStart, new OperationId(Invoker.Id, Token));
+
+        var targetSpan = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType));
+        MemoryMarshal.Write(targetSpan, RequestOptions);
+
+        targetSpan = targetSpan[1..];
+
+        MemoryMarshal.Write(targetSpan, new OperationId(Invoker.Id, Token));
+        targetSpan = targetSpan[OperationId.Size..];
+
+        MemoryMarshal.Write(targetSpan, Invoker.RemoteId.GetAwaiter().GetResult());
 
         if (CancellationToken.CanBeCanceled)
         {
@@ -114,7 +134,7 @@ internal abstract class InvokerOperation
             }, this);
         }
 
-        Connection.Dispatch(RequestOptions, writer, null);
+        Connection.Dispatch(writer);
     }
 
     public void Complete(ref SequenceReader<byte> responseBody)
@@ -142,10 +162,9 @@ internal abstract class InvokerOperation
         Debug.Assert(Connection is { } && SerializationContext is { } && Invoker is { });
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageOptions.None, writer);
         SerializationContext.Serialize(MessageType.ExecuteCancel, writer);
         SerializationContext.Serialize(new OperationId(Invoker.Id, Token), writer);
-        Connection.Dispatch(MessageOptions.None, writer, null);
+        Connection.Dispatch(writer, null);
     }
 }
 

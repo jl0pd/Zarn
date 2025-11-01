@@ -2,6 +2,8 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using StreamRpc.Protocol;
 using StreamRpc.Serialization.Serializers;
 using StreamRpc.Serialization.Serializers.Core;
 using StreamRpc.Serialization.Serializers.Exceptions;
@@ -79,6 +81,7 @@ public sealed class BinarySerializationContext
     };
 
     private readonly JsonBinarySerializerFactory _jsonFactory = new();
+    private readonly StrongBox<ConnectionContext?> _connection = new();
 
     private readonly MemoryProvider? _memoryProvider;
 
@@ -112,6 +115,14 @@ public sealed class BinarySerializationContext
                 _instances.TryAdd(exType, serializer);
             }
         }
+
+        _factories.Add(new InterfaceProxyBinarySerializerFactory(_connection));
+    }
+
+    internal void SetConnection(ConnectionContext connection)
+    {
+        Debug.Assert(_connection.Value is null);
+        _connection.Value = connection;
     }
 
     public BinarySerializer GetSerializer(Type type)

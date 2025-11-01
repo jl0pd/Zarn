@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using StreamRpc.Serialization;
+using StreamRpc.TypeGeneration;
 using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
@@ -8,20 +9,19 @@ namespace StreamRpc.Protocol;
 internal sealed class ConnectionContext
 {
     private readonly record struct OutputMessage(
-                                        MessageOptions Options,
                                         int Length,
                                         ChunkedArrayPoolBufferWriter<byte> Header,
                                         ChunkedArrayPoolBufferWriter<byte>? Body);
 
     private readonly Stream _stream;
-    private readonly MessageOptions _commonOptions;
     private readonly IServiceProvider _calleeServices;
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
-    private readonly ConcurrentDictionary<Guid, InvokerState> _invokers = new();
+    private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = new();
     private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
+    private readonly ConcurrentDictionary<ObjectId, (object Obj, CalleeFactory Factory)> _idToObj = new();
 
     public Pools Pools { get; }
 
@@ -36,19 +36,20 @@ internal sealed class ConnectionContext
         Pools = pools;
         Settings = settings;
         SerializationContext = pools.SerializationContext; // keep it closer
+        SerializationContext.SetConnection(this);
         _maxConcurrentOperations = settings.MaxConcurrentOperations;
         _callees = new CalleesState(this, _maxConcurrentOperations);
         _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
     }
 
-    public InvokerBase GetInvoker(Type invokerType)
+    public InvokerBase GetInvoker(Type invokerType, bool isReverseCall)
     {
         int typeSlot = -1;
         Type interfaceType = invokerType.IsConstructedGenericType
                                 ? invokerType.GetGenericTypeDefinition()
                                 : invokerType;
 
-        var factories = Pools.InvokerFactories;
+        var factories = isReverseCall ? Pools.ReverseCalleeFactories : Pools.InvokerFactories;
         for (int i = 0; i < factories.Length; i++)
         {
             if (factories[i].InterfaceType == interfaceType)
@@ -63,17 +64,24 @@ internal sealed class ConnectionContext
             throw new KeyNotFoundException("Unable to find implementation for type" + invokerType);
         }
 
+        Type[] genericArgs = [];
         InvokerBase invoker;
         if (invokerType.IsConstructedGenericType)
         {
-            invoker = factories[typeSlot].GetInvoker(invokerType.GetGenericArguments());
+            genericArgs = invokerType.GetGenericArguments();
+            invoker = factories[typeSlot].GetInvoker(isReverseCall, genericArgs);
         }
         else
         {
-            invoker = factories[typeSlot].GetInvoker();
+            invoker = factories[typeSlot].GetInvoker(isReverseCall);
         }
-        invoker.TypeSlot = typeSlot + 1;
-        invoker.State = new InvokerState(OperationId.GenObjectId(), this, _maxConcurrentOperations, _concurrentOperationsSemaphore);
+
+        invoker.State = new InvokerState(this,
+                                         typeSlot + 1,
+                                         genericArgs,
+                                         _maxConcurrentOperations,
+                                         _concurrentOperationsSemaphore);
+
         _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
         {
             const string message = "Multiple invokers with same id may not exist";
@@ -82,6 +90,27 @@ internal sealed class ConnectionContext
         });
 
         return invoker;
+    }
+
+    public object GetInstance(ObjectId id) => _idToObj[id].Obj;
+
+    public CalleeFactory GetCalleeFactory(Type calleeType)
+    {
+        var simpleType = calleeType.IsConstructedGenericType
+                            ? calleeType.GetGenericTypeDefinition()
+                            : calleeType;
+
+        var factories = Pools.ReverseInvokerFactories;
+
+        foreach (var factory in factories)
+        {
+            if (factory.InterfaceType == simpleType)
+            {
+                return factory;
+            }
+        }
+
+        throw ThrowHelper.Unreachable;
     }
 
     public async Task SendMessages(CancellationToken cancellationToken)
@@ -98,11 +127,6 @@ internal sealed class ConnectionContext
 
             while (_outputMessages.TryDequeue(out var msg))
             {
-                if (_commonOptions.HasFlag(MessageOptions.Compressed))
-                {
-                    throw new NotImplementedException();
-                }
-
                 int chunkId = 0;
                 foreach (var chunk in msg.Header)
                 {
@@ -113,8 +137,6 @@ internal sealed class ConnectionContext
                         int skipBytes = PackedInt.MaxSize - msgBytesLength;
                         int written = PackedInt.Write(msg.Length - skipBytes, chunk.Array.AsSpan(skipBytes));
                         Debug.Assert(written == msgBytesLength);
-
-                        chunk.Array[PackedInt.MaxSize] = (byte)(msg.Options | _commonOptions | MessageOptions.LastChunk);
                         memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
                     }
                     else
@@ -194,10 +216,12 @@ internal sealed class ConnectionContext
 
     private void HandleMessage(ChunkedArrayPoolBufferWriter<byte> message)
     {
-        Debug.Assert(((MessageOptions)message.FirstChunkRequired.Array[0] & MessageOptions.ReservedMask) == 0);
-        var type = (MessageType)message.FirstChunkRequired.Array[1];
+        var type = (MessageType)message.FirstChunkRequired.Array[0];
         switch (type)
         {
+            case MessageType.Error:
+                throw ThrowHelper.Fail("Error message received");
+
             case MessageType.ExecuteRequest:
                 HandleExecuteRequest(message);
                 break;
@@ -207,16 +231,73 @@ internal sealed class ConnectionContext
             case MessageType.ExecuteCancel:
                 HandleExecuteCancel(message);
                 break;
+            case MessageType.GetRemoteIdRequest:
+                HandleGetRemoteIdRequest(message);
+                break;
+            case MessageType.GetRemoteIdResponse:
+                HandleGetRemoteIdResponse(message);
+                break;
             default:
                 Debug.Fail("Invalid message");
                 break;
         }
     }
 
+    private void HandleGetRemoteIdResponse(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
+        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
+
+        _invokers[invokerId].SetRemoteId(remoteId);
+
+        Pools.Return(message);
+    }
+
+    private void HandleGetRemoteIdRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
+        var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
+        var genericArgs = SerializationContext.Deserialize<Type[]>(ref reader);
+
+        var factory = Pools.CalleeFactories[typeSlot];
+        var calleeType = genericArgs.Length > 0
+            ? factory.ImplementationType.MakeGenericType(genericArgs)
+            : factory.InterfaceType;
+
+        var serviceInstance = _calleeServices.GetService(calleeType)
+            ?? throw ThrowHelper.Unreachable; // service must be registered
+
+        var remoteId = RegisterInstance(serviceInstance, factory);
+
+        message.Reset();
+        message.Reserve(PackedInt.MaxSize);
+        SerializationContext.Serialize(MessageType.GetRemoteIdResponse, message);
+        SerializationContext.Serialize(invokerId, message);
+        SerializationContext.Serialize(remoteId, message);
+        Dispatch(message);
+    }
+
+    public ObjectId RegisterInstance(object serviceInstance, CalleeFactory factory)
+    {
+        var remoteId = ObjectId.GenObjectId();
+        while (!_idToObj.TryAdd(remoteId, (serviceInstance, factory)))
+        {
+            remoteId = ObjectId.GenObjectId();
+        }
+
+        return remoteId;
+    }
+
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
-        reader.Advance(2);
+        reader.Advance(1);
 
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
@@ -230,44 +311,20 @@ internal sealed class ConnectionContext
     private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
-        var options = (MessageOptions)reader.UnreadSpan[0];
+        var options = (ExecuteRequestOptions)reader.UnreadSpan[1];
 
         reader.Advance(2);
 
         var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
-        var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
-        Type calleeType;
-        CalleeBase callee;
-        var factory = Pools.CalleeFactories[typeSlot];
-        if (options.HasFlag(MessageOptions.GenericType))
-        {
-            int argsCount = SerializationContext.Deserialize<int>(ref reader);
-            var typeArgs = new Type[argsCount];
-            for (int i = 0; i < typeArgs.Length; i++)
-            {
-                typeArgs[i] = SerializationContext.Deserialize<Type>(ref reader);
-            }
+        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
 
-            calleeType = factory.ImplementationType.MakeGenericType(typeArgs);
-            callee = (CalleeBase)Activator.CreateInstance(calleeType)!;
-        }
-        else
-        {
-            calleeType = factory.InterfaceType;
-            callee = factory.GetCallee();
-        }
+        var (instance, factory) = _idToObj[remoteId];
 
+        CalleeBase callee = factory.GetCallee();
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
-        if (options.HasFlag(MessageOptions.GenericMethod))
+        if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
         {
-            int argsCount = SerializationContext.Deserialize<int>(ref reader);
-            var typeArgs = new Type[argsCount];
-            for (int i = 0; i < typeArgs.Length; i++)
-            {
-                typeArgs[i] = SerializationContext.Deserialize<Type>(ref reader);
-            }
-
-            callee.GenericMethodArgs = typeArgs;
+            callee.GenericMethodArgs = SerializationContext.Deserialize<Type[]>(ref reader);
         }
 
         callee.Factory = factory;
@@ -282,7 +339,7 @@ internal sealed class ConnectionContext
             throw new NotImplementedException();
         }
         callee.Arguments = message;
-        callee.Impl = _calleeServices.GetService(calleeType) ?? throw new InvalidOperationException();
+        callee.Impl = instance;
         callee.ReaderOffset = reader.Consumed;
         callee.Cts = Pools.GetCts();
 
@@ -298,8 +355,8 @@ internal sealed class ConnectionContext
 
         var invoker = _invokers[opId.Target];
 
-        var options = (MessageOptions)message.FirstChunkRequired.Array[0];
-        if (options.HasFlag(MessageOptions.Success))
+        var options = (ExecuteResponseOptions)message.FirstChunkRequired.Array[1];
+        if (options.HasFlag(ExecuteResponseOptions.Success))
         {
             invoker.Complete(opId.Id, ref reader);
         }
@@ -315,7 +372,12 @@ internal sealed class ConnectionContext
         Pools.Return(message);
     }
 
-    public void Dispatch(MessageOptions options, ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header)
+    {
+        Dispatch(header, null);
+    }
+
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
     {
         long length = header.TotalLength;
         if (body is { })
@@ -323,7 +385,7 @@ internal sealed class ConnectionContext
             length += body.TotalLength;
         }
 
-        _outputMessages.Enqueue(new OutputMessage(options, checked((int)length), header, body));
+        _outputMessages.Enqueue(new OutputMessage(checked((int)length), header, body));
         _outputMessagesEvent.Set();
     }
 }

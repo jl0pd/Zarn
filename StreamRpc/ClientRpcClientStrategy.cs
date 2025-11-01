@@ -64,7 +64,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         };
         request.Serialize(message, _serializationContext);
 
-        await StreamHelper.Send(stream, MessageOptions.None, message, cancellationToken);
+        await StreamHelper.Send(stream, message, cancellationToken);
 
         message.Reset();
         var initialBuffer = new byte[PackedInt.MaxSize];
@@ -76,9 +76,9 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         var response = MessageBase.ReadMessage<HandshakeResponseMessage>(message, _serializationContext);
         _pools.Return(message);
 
-        if (response.Error != ErrorCode.Ok)
+        if (response.ErrorCode != ErrorCode.Ok)
         {
-            throw new ProtocolViolationException("An error occurred on attempt to establish connection: " + response.Error);
+            throw new ProtocolViolationException("An error occurred on attempt to establish connection: " + response.ErrorCode);
         }
 
         if (response.IsLittleEndian != BitConverter.IsLittleEndian)
@@ -89,11 +89,6 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         if (response.ChosenCompression != null)
         {
             throw new NotSupportedException("Server request compression, which is not currently supported");
-        }
-
-        if (!response.Options.HasFlag(MessageOptions.Success))
-        {
-            throw new ProtocolViolationException("Unknown error has occurred");
         }
 
         return new ConnectionContext(stream, new Pools(_pools, request.Interfaces, response.Interfaces), _settings, Services);

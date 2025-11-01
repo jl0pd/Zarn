@@ -11,7 +11,7 @@ public abstract class RpcTestsBase
     {
         var (serverStream, clientStream) = FullDuplexStream.CreatePair();
 
-        await using var server = new RpcServer(new TestServerRpcStreamProvider(serverStream));
+        await using var server = new RpcServer(RpcStreamProvider.FromStream(serverStream));
 
         server.ConfigureServices(services =>
         {
@@ -19,7 +19,7 @@ public abstract class RpcTestsBase
             services.AllowRemoteConnection<TInterface>();
         });
 
-        await using var client = new RpcClient(new TestServerRpcStreamProvider(clientStream));
+        await using var client = new RpcClient(RpcStreamProvider.FromStream(clientStream));
 
         server.Start();
 

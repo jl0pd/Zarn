@@ -30,6 +30,12 @@ internal sealed class CalleeFactory
         return _cache.Get();
     }
 
+    public CalleeBase GetCallee(Type[] typeArgs)
+    {
+        var actualType = ImplementationType.MakeGenericType(typeArgs);
+        return (CalleeBase)Activator.CreateInstance(actualType)!;
+    }
+
     public void Return(CalleeBase callee)
     {
         Debug.Assert(callee.ImplementedInterface == InterfaceType);

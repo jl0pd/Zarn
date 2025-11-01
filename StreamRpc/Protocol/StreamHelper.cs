@@ -9,16 +9,14 @@ namespace StreamRpc.Protocol;
 internal static class StreamHelper
 {
     public static ValueTask Send(Stream stream,
-                                 MessageOptions options,
                                  ChunkedArrayPoolBufferWriter<byte> header,
                                  CancellationToken cancellationToken)
     {
-        return Send(stream, header.TotalLength, options, header, null, cancellationToken);
+        return Send(stream, header.TotalLength, header, null, cancellationToken);
     }
 
     public static async ValueTask Send(Stream stream,
                                        long length,
-                                       MessageOptions options,
                                        ChunkedArrayPoolBufferWriter<byte> header,
                                        ChunkedArrayPoolBufferWriter<byte>? body,
                                        CancellationToken cancellationToken)
@@ -33,8 +31,6 @@ internal static class StreamHelper
                 int skipBytes = PackedInt.MaxSize - msgBytesLength;
                 int written = PackedInt.Write(length - skipBytes, chunk.Array.AsSpan(skipBytes));
                 Debug.Assert(written == msgBytesLength);
-
-                chunk.Array[PackedInt.MaxSize] = (byte)options;
                 memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
             }
             else

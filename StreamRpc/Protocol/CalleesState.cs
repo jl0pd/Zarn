@@ -58,19 +58,19 @@ internal sealed class CalleesState(ConnectionContext connection, int maxConcurre
     {
         Remove(callee);
 
-        var options = exception is null ? MessageOptions.Success : MessageOptions.None;
+        var options = exception is null ? ExecuteResponseOptions.Success : ExecuteResponseOptions.None;
         var header = Pools.GetWriter();
 
         header.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(options, header);
         SerializationContext.Serialize(MessageType.ExecuteResponse, header);
+        SerializationContext.Serialize(options, header);
         SerializationContext.Serialize(callee.OperationId, header);
         if (exception is not null)
         {
             SerializationContext.SerializeAny(exception, header);
         }
 
-        Connection.Dispatch(options, header, returnValue);
+        Connection.Dispatch(header, returnValue);
 
         Pools.Return(Interlocked.Exchange(ref callee.Cts, null));
 
