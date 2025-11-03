@@ -19,7 +19,10 @@ internal sealed class AsyncAutoResetEvent
 
     private sealed class Source : IValueTaskSource
     {
-        private ManualResetValueTaskSourceCore<object?> _source;
+        private ManualResetValueTaskSourceCore<object?> _source = new()
+        {
+            RunContinuationsAsynchronously = true,
+        };
         private bool _isResultSet = false;
         private readonly Lock _lock = new();
 
