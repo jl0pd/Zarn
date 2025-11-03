@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using StreamRpc.Protocol.EnumerableSupport;
 using StreamRpc.Serialization;
 using StreamRpc.TypeGeneration;
 using StreamRpc.Utils;
@@ -76,6 +77,13 @@ internal sealed class Pools
                 .Get());
     }
 
+    public MoveNextInvokerOperation<T> GetMoveNextInvokerOperation<T>()
+    {
+        return Unsafe.As<MoveNextInvokerOperation<T>>(_invokerOperationsCache
+                .GetOrAdd(typeof(MoveNextResult<T>), _ => new Cache<InvokerOperation>(() => new MoveNextInvokerOperation<T>()))
+                .Get());
+    }
+
     public ChunkedArrayPoolBufferWriter<byte> GetWriter()
     {
         return _writerPool.Get();
@@ -104,6 +112,11 @@ internal sealed class Pools
     public void Return<T>(InvokerOperation<T> operation)
     {
         _invokerOperationsCache[typeof(T)].Return(operation);
+    }
+
+    public void Return<T>(MoveNextInvokerOperation<T> operation)
+    {
+        _invokerOperationsCache[typeof(MoveNextResult<T>)].Return(operation);
     }
 
     public void Return(ChunkedArrayPoolBufferWriter<byte>? writer)

@@ -1,6 +1,5 @@
 ﻿using System.Reflection;
 using System.Reflection.Emit;
-using StreamRpc.Protocol;
 
 namespace StreamRpc.TypeGeneration;
 
@@ -63,38 +62,6 @@ internal static class ImplementerCommon
         return methodReturnType;
     }
 
-    public static void DefineImplementedInterfaceProp(TypeBuilder typeBuilder, Type interfaceType)
-    {
-        var getter = typeBuilder.DefineMethod(
-                                    "get_" + nameof(InvokerBase.ImplementedInterface),
-                                     MethodAttributes.FamORAssem | MethodAttributes.Virtual | MethodAttributes.Final,
-                                     typeof(Type),
-                                     null);
-
-        typeBuilder.DefineMethodOverride(
-            getter,
-            typeBuilder.BaseType!.GetMethod(
-                    "get_" + nameof(InvokerBase.ImplementedInterface),
-                    BindingFlags.NonPublic | BindingFlags.Instance
-            )!
-        );
-
-        {
-            var il = getter.GetILGenerator();
-            il.Emit(OpCodes.Ldtoken, interfaceType);
-            il.Emit(OpCodes.Call, Type_GetTypeFromHandle);
-            il.Emit(OpCodes.Ret);
-        }
-
-        var prop = typeBuilder.DefineProperty(
-                        nameof(InvokerBase.ImplementedInterface),
-                        PropertyAttributes.None,
-                        typeof(Type),
-                        null);
-
-        prop.SetGetMethod(getter);
-    }
-
     public static void DefineCtor(TypeBuilder typeBuilder, ConstructorInfo baseCtor)
     {
         var ctor = typeBuilder.DefineConstructor(
@@ -108,4 +75,3 @@ internal static class ImplementerCommon
         il.Emit(OpCodes.Ret);
     }
 }
-

@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using StreamRpc.Protocol;
+using StreamRpc.Protocol.EnumerableSupport;
+using StreamRpc.TypeGeneration;
 
 namespace StreamRpc.Serialization.Serializers.Core;
 
@@ -16,8 +18,24 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
     public override BinarySerializer CreateSerializer(Type type)
     {
         var actualConnection = connection.Value ?? throw ThrowHelper.Unreachable;
-        var serializer = (BinarySerializer)Activator.CreateInstance(typeof(Serializer<>).MakeGenericType(type), [actualConnection])!;
+        var strategyType = DetermineStrategy(type);
+        var serType = typeof(Serializer<,>).MakeGenericType(type, strategyType);
+        var serializer = (BinarySerializer)Activator.CreateInstance(serType, [actualConnection])!;
         return serializer;
+    }
+
+    private static Type DetermineStrategy(Type type)
+    {
+        if (type.IsConstructedGenericType)
+        {
+            var typeDef = type.GetGenericTypeDefinition();
+            if (typeDef == typeof(IEnumerable<>) || typeDef == typeof(IAsyncEnumerable<>))
+            {
+                return typeof(EnumerableHandlingStrategy<>).MakeGenericType(type.GetGenericArguments());
+            }
+        }
+
+        return typeof(AnyHandlingStrategy<>).MakeGenericType(type);
     }
 
     private enum ValueKind : byte
@@ -27,7 +45,51 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
         Any,
     }
 
-    private sealed class Serializer<T>(ConnectionContext connection) : BinarySerializer<T?> where T : class
+    private interface IAnyHandlingStrategy
+    {
+        static abstract ObjectId Register(ConnectionContext connection, object value);
+
+        static abstract object ResolveInstance(ConnectionContext connection, ObjectId id);
+    }
+
+    private sealed class AnyHandlingStrategy<T> : IAnyHandlingStrategy
+    {
+        public static ObjectId Register(ConnectionContext connection, object value)
+        {
+            return connection.InstanceManager.Register(value, connection.InstanceManager.GetCalleeFactory(typeof(T)));
+        }
+
+        public static object ResolveInstance(ConnectionContext connection, ObjectId id)
+        {
+            var invoker = connection.InstanceManager.GetInvoker(typeof(T), ObjectId.GenObjectId(), true);
+            invoker.State.SetRemoteId(id);
+            return invoker;
+        }
+    }
+
+    private sealed class EnumerableHandlingStrategy<T> : IAnyHandlingStrategy
+    {
+        public static ObjectId Register(ConnectionContext connection, object value)
+        {
+            return connection.InstanceManager.Register(value, UnreachableCalleeFactory.Instance);
+        }
+
+        public static object ResolveInstance(ConnectionContext connection, ObjectId id)
+        {
+            var invoker = new EnumerableInvoker<T>
+            {
+                State = new InvokerState(connection, id)
+                {
+                    Id = ObjectId.GenObjectId()
+                },
+            };
+            return invoker;
+        }
+    }
+
+    private sealed class Serializer<T, TStrategy>(ConnectionContext connection) : BinarySerializer<T?>
+        where T : class
+        where TStrategy : IAnyHandlingStrategy
     {
         public override T? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
         {
@@ -38,13 +100,12 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
                     return null;
                 case ValueKind.Invoker:
                     var id = context.Deserialize<ObjectId>(ref source);
-                    var invoker = connection.GetInstance(id);
+                    var invoker = connection.InstanceManager.GetDescriptor(id).Instance;
                     return (T)invoker;
                 case ValueKind.Any:
                     id = context.Deserialize<ObjectId>(ref source);
-                    var anyInvoker = connection.GetInvoker(typeof(T), true);
-                    anyInvoker.State.SetRemoteId(id);
-                    return (T)(object)anyInvoker;
+                    var anyInvoker = TStrategy.ResolveInstance(connection, id);
+                    return (T)anyInvoker;
                 default:
                     throw new InvalidDataException();
             }
@@ -63,8 +124,7 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
                     break;
                 default:
                     context.Serialize(ValueKind.Any, writer);
-                    var factory = connection.GetCalleeFactory(typeof(T));
-                    var id = connection.RegisterInstance(value, factory);
+                    var id = TStrategy.Register(connection, value);
                     context.Serialize(id, writer);
                     break;
             }

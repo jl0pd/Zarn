@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using StreamRpc.Serialization;
-using StreamRpc.TypeGeneration;
 using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
@@ -14,14 +13,14 @@ internal sealed class ConnectionContext
                                         ChunkedArrayPoolBufferWriter<byte>? Body);
 
     private readonly Stream _stream;
-    private readonly IServiceProvider _calleeServices;
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
-    private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = new();
-    private readonly CalleesState _callees;
-    private readonly SemaphoreSlim _concurrentOperationsSemaphore;
-    private readonly int _maxConcurrentOperations;
-    private readonly ConcurrentDictionary<ObjectId, (object Obj, CalleeFactory Factory)> _idToObj = new();
+
+    public int MaxConcurrentOperations { get; }
+
+    public CalleeOperations CalleeOperations { get; }
+
+    public SemaphoreSlim ConcurrentOperationsSemaphore { get; }
 
     public Pools Pools { get; }
 
@@ -29,88 +28,29 @@ internal sealed class ConnectionContext
 
     public BinarySerializationContext SerializationContext { get; }
 
+    public InstanceManager InstanceManager { get; }
+
+    public IInstanceManager RemoteInstanceManager { get; }
+
     public ConnectionContext(Stream stream, Pools pools, RpcSettings settings, IServiceProvider services)
     {
         _stream = stream;
-        _calleeServices = services;
         Pools = pools;
         Settings = settings;
         SerializationContext = pools.SerializationContext; // keep it closer
         SerializationContext.SetConnection(this);
-        _maxConcurrentOperations = settings.MaxConcurrentOperations;
-        _callees = new CalleesState(this, _maxConcurrentOperations);
-        _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
+        MaxConcurrentOperations = settings.MaxConcurrentOperations;
+        CalleeOperations = new CalleeOperations(MaxConcurrentOperations);
+        ConcurrentOperationsSemaphore = new(MaxConcurrentOperations, MaxConcurrentOperations);
+        InstanceManager = new InstanceManager(this, services);
+        RemoteInstanceManager = GetCommunicationService<IInstanceManager>(CommunicationServices.InstanceManager);
     }
 
-    public InvokerBase GetInvoker(Type invokerType, bool isReverseCall)
+    private T GetCommunicationService<T>(ObjectId id) where T : class
     {
-        int typeSlot = -1;
-        Type interfaceType = invokerType.IsConstructedGenericType
-                                ? invokerType.GetGenericTypeDefinition()
-                                : invokerType;
-
-        var factories = isReverseCall ? Pools.ReverseCalleeFactories : Pools.InvokerFactories;
-        for (int i = 0; i < factories.Length; i++)
-        {
-            if (factories[i].InterfaceType == interfaceType)
-            {
-                typeSlot = i;
-                break;
-            }
-        }
-
-        if (typeSlot < 0)
-        {
-            throw new KeyNotFoundException("Unable to find implementation for type" + invokerType);
-        }
-
-        Type[] genericArgs = [];
-        InvokerBase invoker;
-        if (invokerType.IsConstructedGenericType)
-        {
-            genericArgs = invokerType.GetGenericArguments();
-            invoker = factories[typeSlot].GetInvoker(isReverseCall, genericArgs);
-        }
-        else
-        {
-            invoker = factories[typeSlot].GetInvoker(isReverseCall);
-        }
-
-        invoker.State = new InvokerState(this,
-                                         typeSlot + 1,
-                                         genericArgs,
-                                         _maxConcurrentOperations,
-                                         _concurrentOperationsSemaphore);
-
-        _invokers.AddOrUpdate(invoker.State.Id, invoker.State, (key, value) =>
-        {
-            const string message = "Multiple invokers with same id may not exist";
-            Debug.Fail(message);
-            throw new InvalidOperationException(message);
-        });
-
-        return invoker;
-    }
-
-    public object GetInstance(ObjectId id) => _idToObj[id].Obj;
-
-    public CalleeFactory GetCalleeFactory(Type calleeType)
-    {
-        var simpleType = calleeType.IsConstructedGenericType
-                            ? calleeType.GetGenericTypeDefinition()
-                            : calleeType;
-
-        var factories = Pools.ReverseInvokerFactories;
-
-        foreach (var factory in factories)
-        {
-            if (factory.InterfaceType == simpleType)
-            {
-                return factory;
-            }
-        }
-
-        throw ThrowHelper.Unreachable;
+        var invoker = InstanceManager.GetInvoker(typeof(T), id, false);
+        invoker.State.SetRemoteId(id);
+        return (T)(object)invoker;
     }
 
     public async Task SendMessages(CancellationToken cancellationToken)
@@ -231,67 +171,10 @@ internal sealed class ConnectionContext
             case MessageType.ExecuteCancel:
                 HandleExecuteCancel(message);
                 break;
-            case MessageType.GetRemoteIdRequest:
-                HandleGetRemoteIdRequest(message);
-                break;
-            case MessageType.GetRemoteIdResponse:
-                HandleGetRemoteIdResponse(message);
-                break;
             default:
                 Debug.Fail("Invalid message");
                 break;
         }
-    }
-
-    private void HandleGetRemoteIdResponse(ChunkedArrayPoolBufferWriter<byte> message)
-    {
-        var reader = message.GetReader();
-        reader.Advance(1);
-
-        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
-        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
-
-        _invokers[invokerId].SetRemoteId(remoteId);
-
-        Pools.Return(message);
-    }
-
-    private void HandleGetRemoteIdRequest(ChunkedArrayPoolBufferWriter<byte> message)
-    {
-        var reader = message.GetReader();
-        reader.Advance(1);
-
-        var invokerId = SerializationContext.Deserialize<ObjectId>(ref reader);
-        var typeSlot = SerializationContext.Deserialize<int>(ref reader) - 1;
-        var genericArgs = SerializationContext.Deserialize<Type[]>(ref reader);
-
-        var factory = Pools.CalleeFactories[typeSlot];
-        var calleeType = genericArgs.Length > 0
-            ? factory.ImplementationType.MakeGenericType(genericArgs)
-            : factory.InterfaceType;
-
-        var serviceInstance = _calleeServices.GetService(calleeType)
-            ?? throw ThrowHelper.Unreachable; // service must be registered
-
-        var remoteId = RegisterInstance(serviceInstance, factory);
-
-        message.Reset();
-        message.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageType.GetRemoteIdResponse, message);
-        SerializationContext.Serialize(invokerId, message);
-        SerializationContext.Serialize(remoteId, message);
-        Dispatch(message);
-    }
-
-    public ObjectId RegisterInstance(object serviceInstance, CalleeFactory factory)
-    {
-        var remoteId = ObjectId.GenObjectId();
-        while (!_idToObj.TryAdd(remoteId, (serviceInstance, factory)))
-        {
-            remoteId = ObjectId.GenObjectId();
-        }
-
-        return remoteId;
     }
 
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
@@ -302,7 +185,7 @@ internal sealed class ConnectionContext
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
         // it's possible for cancellation to arrive after operation is already completed
-        if (_callees.Find(opId) is { } op)
+        if (CalleeOperations.Find(opId) is { } op)
         {
             Interlocked.Exchange(ref op.Cts, null)?.Cancel();
         }
@@ -318,19 +201,19 @@ internal sealed class ConnectionContext
         var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
         var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
 
-        var (instance, factory) = _idToObj[remoteId];
+        var descriptor = InstanceManager.GetDescriptor(remoteId);
 
-        CalleeBase callee = factory.GetCallee();
+        CalleeBase callee = descriptor.CalleeFactory.Get();
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
         if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
         {
             callee.GenericMethodArgs = SerializationContext.Deserialize<Type[]>(ref reader);
         }
 
-        callee.Factory = factory;
-        callee.Callees = _callees;
+        callee.Factory = descriptor.CalleeFactory;
+        callee.Connection = this;
         callee.OperationId = operationId;
-        if (!_callees.Register(callee))
+        if (!CalleeOperations.Register(callee))
         {
             // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
             // Currently this doesn't happen, and unlikely to happen in future, at least while people won't start
@@ -339,7 +222,7 @@ internal sealed class ConnectionContext
             throw new NotImplementedException();
         }
         callee.Arguments = message;
-        callee.Impl = instance;
+        callee.Impl = descriptor.Instance;
         callee.ReaderOffset = reader.Consumed;
         callee.Cts = Pools.GetCts();
 
@@ -353,7 +236,7 @@ internal sealed class ConnectionContext
 
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
-        var invoker = _invokers[opId.Target];
+        var invoker = InstanceManager.GetInvokerState(opId.Target);
 
         var options = (ExecuteResponseOptions)message.FirstChunkRequired.Array[1];
         if (options.HasFlag(ExecuteResponseOptions.Success))

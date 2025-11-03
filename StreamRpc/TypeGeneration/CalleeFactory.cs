@@ -1,7 +1,5 @@
 ﻿using System.Diagnostics;
-using System.Reflection;
 using StreamRpc.Protocol;
-using StreamRpc.Utils;
 
 namespace StreamRpc.TypeGeneration;
 
@@ -10,9 +8,9 @@ internal sealed class CalleeFactory
     public Type InterfaceType { get; }
     public Type ImplementationType { get; }
 
-    private readonly Cache<CalleeBase> _cache;
-
-    public MethodInfo[] MethodsTable { get; }
+    private readonly List<(Type[] GenType, ICalleeFactory Factory)> _genericFactories = [];
+    private ICalleeFactory? _nonGenericFactory;
+    private readonly Lock _genFactoriesLock = new();
 
     public CalleeFactory(InterfaceDescriptor descriptor)
     {
@@ -21,24 +19,43 @@ internal sealed class CalleeFactory
         Debug.Assert(interfaceType.IsInterface);
         InterfaceType = interfaceType;
         ImplementationType = CalleeImplementer.GetImplementation(interfaceType);
-        MethodsTable = interfaceType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
-        _cache = new Cache<CalleeBase>(() => (CalleeBase)Activator.CreateInstance(ImplementationType)!);
     }
 
-    public CalleeBase GetCallee()
+    public ICalleeFactory? TryGetFactory(Type interfaceType)
     {
-        return _cache.Get();
+        Debug.Assert(!interfaceType.IsGenericType);
+        if (interfaceType == InterfaceType)
+        {
+            return Volatile.Read(ref _nonGenericFactory)
+                ?? Interlocked.CompareExchange(ref _nonGenericFactory, new CompiledCalleeFactory(ImplementationType), null)
+                ?? _nonGenericFactory;
+        }
+
+        return null;
     }
 
-    public CalleeBase GetCallee(Type[] typeArgs)
+    public ICalleeFactory? TryGetFactory(Type interfaceType, Type[] genericArgs)
     {
-        var actualType = ImplementationType.MakeGenericType(typeArgs);
-        return (CalleeBase)Activator.CreateInstance(actualType)!;
-    }
+        Debug.Assert(interfaceType.IsGenericTypeDefinition);
+        Debug.Assert(genericArgs.Length > 0);
+        if (interfaceType == InterfaceType)
+        {
+            var genArgsSpan = genericArgs.AsSpan();
+            lock (_genFactoriesLock)
+            {
+                foreach (var (genType, factory) in _genericFactories)
+                {
+                    if (genArgsSpan.SequenceEqual(genType))
+                    {
+                        return factory;
+                    }
+                }
 
-    public void Return(CalleeBase callee)
-    {
-        Debug.Assert(callee.ImplementedInterface == InterfaceType);
-        _cache.Return(callee);
+                _genericFactories.Add(
+                    (genericArgs, new CompiledCalleeFactory(ImplementationType.MakeGenericType(interfaceType)))
+                );
+            }
+        }
+        return null;
     }
 }

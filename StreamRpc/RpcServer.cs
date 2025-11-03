@@ -43,6 +43,7 @@ public sealed class RpcServer : IAsyncDisposable
         {
             var interfaceDescriptors = _services
                                         .GetRequiredService<AllowedRemoteConnections>()
+                                        .Concat(CommunicationServices.Types)
                                         .Select(InterfaceDescriptor.FromType)
                                         .ToArray();
 

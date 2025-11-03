@@ -59,9 +59,11 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
             Interfaces = Services
                             .GetRequiredService<AllowedRemoteConnections>()
+                            .Concat(CommunicationServices.Types)
                             .Select(InterfaceDescriptor.FromType)
                             .ToArray(),
         };
+        message.Reserve(PackedInt.MaxSize);
         request.Serialize(message, _serializationContext);
 
         await StreamHelper.Send(stream, message, cancellationToken);
@@ -73,7 +75,8 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             throw new EndOfStreamException("Could not read handshake message from stream");
         }
 
-        var response = MessageBase.ReadMessage<HandshakeResponseMessage>(message, _serializationContext);
+        var reader = message.GetReader();
+        var response = HandshakeResponseMessage.Deserialize(ref reader, _serializationContext);
         _pools.Return(message);
 
         if (response.ErrorCode != ErrorCode.Ok)

@@ -14,8 +14,8 @@ internal static class InvokerImplementer
     private static readonly ConstructorInfo InvokerBase_ctor;
     private static readonly MethodInfo InvokerBase_CreateOperationT;
     private static readonly MethodInfo InvokerBase_CreateVoidOperation;
-    private static readonly MethodInfo InvokerBase_SynchronousWaitValueResultT;
-    private static readonly MethodInfo InvokerBase_SynchronousWaitVoidValueResult;
+    private static readonly MethodInfo InvokerBase_SynchronousWaitResultT;
+    private static readonly MethodInfo InvokerBase_SynchronousWaitVoidResult;
     private static readonly MethodInfo InvokerBase_GetMethodSlot;
     private static readonly MethodInfo InvokerOperation_SerializeArgT;
     private static readonly MethodInfo InvokerOperation_SetCancellationToken;
@@ -39,8 +39,8 @@ internal static class InvokerImplementer
         InvokerBase_ctor = invokerBase.DeclaredConstructors.Single();
         InvokerBase_CreateOperationT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.CreateOperation))!;
         InvokerBase_CreateVoidOperation = invokerBase.GetDeclaredMethod(nameof(InvokerBase.CreateVoidOperation))!;
-        InvokerBase_SynchronousWaitValueResultT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitValueResult))!;
-        InvokerBase_SynchronousWaitVoidValueResult = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidValueResult))!;
+        InvokerBase_SynchronousWaitResultT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitResult))!;
+        InvokerBase_SynchronousWaitVoidResult = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidResult))!;
         InvokerBase_GetMethodSlot = invokerBase.GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
 
         InvokerOperation_SerializeArgT = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.SerializeArg))!;
@@ -70,7 +70,6 @@ internal static class InvokerImplementer
         typeBuilder.AddInterfaceImplementation(interfaceType);
 
         ImplementerCommon.DefineCtor(typeBuilder, InvokerBase_ctor);
-        ImplementerCommon.DefineImplementedInterfaceProp(typeBuilder, interfaceType);
 
         var methods = interfaceType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
         for (int i = 0; i < methods.Length; i++)
@@ -216,7 +215,7 @@ internal static class InvokerImplementer
             // SynchronousWaitVoidResult(task);
             // return;
 
-            il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitVoidValueResult);
+            il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitVoidResult);
         }
         else if (interfaceMethod.ReturnType == typeof(ValueTask))
         {
@@ -251,13 +250,13 @@ internal static class InvokerImplementer
             {
                 // not a task type
                 // return SynchronousWaitResult<retType>(task);
-                il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitValueResultT.MakeGenericMethod(interfaceMethod.ReturnType));
+                il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitResultT.MakeGenericMethod(interfaceMethod.ReturnType));
             }
         }
         else
         {
             // return SynchronousWaitResult<retType>(task);
-            il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitValueResultT.MakeGenericMethod(interfaceMethod.ReturnType));
+            il.Emit(OpCodes.Call, InvokerBase_SynchronousWaitResultT.MakeGenericMethod(interfaceMethod.ReturnType));
         }
 
         il.Emit(OpCodes.Ret);

@@ -9,8 +9,8 @@ namespace StreamRpc.Protocol;
 // Note: signature ignores modreq which is not ideal, but neither C# nor F# allow attaching arbitrary modreq/modopt
 // to methods, so we won't have ambiguity unless people start write in MSIL, which is unlikely.
 // ECMA 335: II.15.4.0
-[BinarySerializer<MethodSignatureBinarySerializer>]
 internal sealed record MethodSignature(string Name, SignatureType[] Parameters, SignatureType ReturnType)
+    : IBinarySerializable<MethodSignature>
 {
     public static MethodSignature FromMethod(MethodInfo method)
     {
@@ -77,11 +77,8 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
 
         return sb.ToString();
     }
-}
 
-internal sealed class MethodSignatureBinarySerializer : BinarySerializer<MethodSignature>
-{
-    public override MethodSignature Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    public static MethodSignature Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var name = context.Deserialize<string>(ref source);
         var parameters = context.Deserialize<SignatureType[]>(ref source);
@@ -90,10 +87,10 @@ internal sealed class MethodSignatureBinarySerializer : BinarySerializer<MethodS
         return new MethodSignature(name, parameters, retType);
     }
 
-    public override void Serialize(MethodSignature value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        context.Serialize(value.Name, writer);
-        context.Serialize(value.Parameters, writer);
-        context.Serialize(value.ReturnType, writer);
+        context.Serialize(Name, writer);
+        context.Serialize(Parameters, writer);
+        context.Serialize(ReturnType, writer);
     }
 }

@@ -5,8 +5,6 @@ namespace StreamRpc.Protocol;
 
 internal abstract class InvokerBase
 {
-    internal protected abstract Type ImplementedInterface { get; }
-
     internal InvokerState State { get; set; } = null!;
 
     internal MethodInfo?[] MethodSlots { get; set; } = [];
@@ -25,7 +23,7 @@ internal abstract class InvokerBase
 
     internal protected InvokerOperation<T> CreateOperation<T>()
     {
-        var op = State.CreateOperation<T>();
+        var op = State.Connection.Pools.GetInvokerOperation<T>();
         op.Invoker = State;
         op.Prepare();
         return op;
@@ -33,13 +31,13 @@ internal abstract class InvokerBase
 
     internal protected VoidInvokerOperation CreateVoidOperation()
     {
-        var op = State.CreateOperation();
+        var op = State.Connection.Pools.GetInvokerOperation();
         op.Invoker = State;
         op.Prepare();
         return op;
     }
 
-    internal protected static T SynchronousWaitValueResult<T>(ValueTask<T> task)
+    internal protected static T SynchronousWaitResult<T>(ValueTask<T> task)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
@@ -52,7 +50,7 @@ internal abstract class InvokerBase
         }
     }
 
-    internal protected static void SynchronousWaitVoidValueResult(ValueTask task)
+    internal protected static void SynchronousWaitVoidResult(ValueTask task)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
