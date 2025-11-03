@@ -14,9 +14,6 @@ internal enum MessageType : byte
     ExecuteRequest = 3,
     ExecuteResponse = 4,
     ExecuteCancel = 5,
-
-    GetRemoteIdRequest = 7,
-    GetRemoteIdResponse = 8,
 }
 
 internal sealed class HandshakeRequestMessage : IBinarySerializable<HandshakeRequestMessage>

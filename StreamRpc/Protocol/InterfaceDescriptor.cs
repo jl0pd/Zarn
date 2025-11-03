@@ -18,7 +18,6 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
     public static InterfaceDescriptor FromType(Type type)
     {
         Debug.Assert(type.IsInterface);
-        Debug.Assert(!type.IsGenericType || type.IsGenericTypeDefinition, "Interface cannot be closed generic");
 
         var name = TypeBinarySerializer.RemoveVersion(type.AssemblyQualifiedName);
         Debug.Assert(name is { }, "Assembly qualified name is null only for generic type parameters");

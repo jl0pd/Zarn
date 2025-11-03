@@ -59,6 +59,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
             Interfaces = Services
                             .GetRequiredService<AllowedRemoteConnections>()
+                            .Concat(CommunicationServices.Types)
                             .Select(InterfaceDescriptor.FromType)
                             .ToArray(),
         };

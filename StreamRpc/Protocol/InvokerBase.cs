@@ -23,7 +23,7 @@ internal abstract class InvokerBase
 
     internal protected InvokerOperation<T> CreateOperation<T>()
     {
-        var op = State.CreateOperation<T>();
+        var op = State.Connection.Pools.GetInvokerOperation<T>();
         op.Invoker = State;
         op.Prepare();
         return op;
@@ -31,7 +31,7 @@ internal abstract class InvokerBase
 
     internal protected VoidInvokerOperation CreateVoidOperation()
     {
-        var op = State.CreateOperation();
+        var op = State.Connection.Pools.GetInvokerOperation();
         op.Invoker = State;
         op.Prepare();
         return op;

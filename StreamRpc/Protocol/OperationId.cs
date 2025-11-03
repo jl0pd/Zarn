@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace StreamRpc.Protocol;
 
@@ -22,10 +23,14 @@ internal readonly struct ObjectId : IEquatable<ObjectId>
 
     private ReadOnlySpan<byte> AsSpan() => MemoryMarshal.CreateReadOnlySpan(in _firstByte, Size);
 
-    public static bool IsValid(ObjectId id)
+    public static ObjectId FromSpan(ReadOnlySpan<byte> bytes)
     {
-        return Unsafe.Add(ref Unsafe.As<ObjectId, short>(ref id), 7) == 0;
+        Debug.Assert(bytes.Length == Size);
+        return MemoryMarshal.Read<ObjectId>(bytes);
     }
+
+
+    public string AsAscii => Encoding.ASCII.GetString(AsSpan());
 
     public override string ToString() => Convert.ToHexString(AsSpan());
 
@@ -40,7 +45,7 @@ internal readonly struct ObjectId : IEquatable<ObjectId>
 }
 
 [StructLayout(LayoutKind.Explicit, Size = Size)]
-internal readonly struct OperationId : IEquatable<OperationId>
+internal readonly struct OperationId(ObjectId target, short id) : IEquatable<OperationId>
 {
     public const int Size = 16;
 
@@ -51,19 +56,12 @@ internal readonly struct OperationId : IEquatable<OperationId>
     private readonly int _hashCode;
 
     [field: FieldOffset(Size - sizeof(short))]
-    public short Id { get; }
+    public short Id { get; } = id;
 
     [field: FieldOffset(0)]
-    public ObjectId Target { get; }
+    public ObjectId Target { get; } = target;
 
     public Guid AsGuid() => _asGuid;
-
-    public OperationId(ObjectId target, short id)
-    {
-        Debug.Assert(ObjectId.IsValid(target));
-        Target = target;
-        Id = id;
-    }
 
     public override string ToString() => $"{Target}:{Id}";
 
