@@ -37,7 +37,7 @@ internal abstract class InvokerBase
         return op;
     }
 
-    internal protected static T SynchronousWaitValueResult<T>(ValueTask<T> task)
+    internal protected static T SynchronousWaitResult<T>(ValueTask<T> task)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
@@ -50,7 +50,7 @@ internal abstract class InvokerBase
         }
     }
 
-    internal protected static void SynchronousWaitVoidValueResult(ValueTask task)
+    internal protected static void SynchronousWaitVoidResult(ValueTask task)
     {
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
