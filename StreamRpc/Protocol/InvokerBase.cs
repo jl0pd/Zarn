@@ -5,8 +5,6 @@ namespace StreamRpc.Protocol;
 
 internal abstract class InvokerBase
 {
-    internal protected abstract Type ImplementedInterface { get; }
-
     internal InvokerState State { get; set; } = null!;
 
     internal MethodInfo?[] MethodSlots { get; set; } = [];

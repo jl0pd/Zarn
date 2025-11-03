@@ -54,7 +54,6 @@ internal static class CalleeImplementer
         typeBuilder.SetParent(typeof(CalleeBase));
 
         ImplementerCommon.DefineCtor(typeBuilder, CalleeBase_ctor);
-        ImplementerCommon.DefineImplementedInterfaceProp(typeBuilder, interfaceType);
 
         var implField = ImplementImplProp(typeBuilder, interfaceType);
 

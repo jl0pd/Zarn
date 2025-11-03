@@ -70,7 +70,6 @@ internal static class InvokerImplementer
         typeBuilder.AddInterfaceImplementation(interfaceType);
 
         ImplementerCommon.DefineCtor(typeBuilder, InvokerBase_ctor);
-        ImplementerCommon.DefineImplementedInterfaceProp(typeBuilder, interfaceType);
 
         var methods = interfaceType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
         for (int i = 0; i < methods.Length; i++)

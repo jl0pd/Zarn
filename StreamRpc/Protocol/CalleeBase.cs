@@ -7,8 +7,6 @@ namespace StreamRpc.Protocol;
 
 internal abstract class CalleeBase : IThreadPoolWorkItem
 {
-    internal abstract Type ImplementedInterface { get; }
-
     internal abstract object Impl { get; set; }
 
     protected CalleeBase() { }
