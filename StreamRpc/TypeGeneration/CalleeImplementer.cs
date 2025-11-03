@@ -72,14 +72,13 @@ internal static class CalleeImplementer
             switch (methodSlot)
             {
                 case 0:
-                    _0(ref argumentsReader);
+                    InvokerStub#0(ref argumentsReader);
                     return;
                 case 1:
-                    _1(ref argumentsReader);
+                    InvokerStub#1(ref argumentsReader);
                     return;
                 default:
-                    ThrowHelper.Fail("errMsg");
-                    return;
+                    throw ThrowHelper.Fail("errMsg");
             }
         }
         */
@@ -112,7 +111,7 @@ internal static class CalleeImplementer
 
         il.Emit(OpCodes.Ldstr, "Invalid method slot was passed for invoke");
         il.Emit(OpCodes.Call, ImplementerCommon.ThrowHelper_Fail);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Throw);
     }
 
     private static MethodBuilder[] ImplementInvokeStubs(TypeBuilder typeBuilder, Type interfaceType, FieldBuilder implField)
