@@ -8,10 +8,9 @@ using StreamRpc.Serialization.Serializers.Core;
 
 namespace StreamRpc.Protocol;
 
-[BinarySerializer<InterfaceDescriptorBinarySerializer>]
 internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
                                            int GenericParameterCount,
-                                           MethodSignature[] Methods)
+                                           MethodSignature[] Methods) : IBinarySerializable<InterfaceDescriptor>
 {
     private Type? _resolvedType;
     private MethodInfo?[]? _resolvedMethods;
@@ -94,11 +93,8 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
 
         return sb.ToString();
     }
-}
 
-internal sealed class InterfaceDescriptorBinarySerializer : BinarySerializer<InterfaceDescriptor>
-{
-    public override InterfaceDescriptor Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    public static InterfaceDescriptor Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var name = context.Deserialize<string>(ref source);
         var count = context.Deserialize<int>(ref source);
@@ -107,10 +103,10 @@ internal sealed class InterfaceDescriptorBinarySerializer : BinarySerializer<Int
         return new InterfaceDescriptor(name, count, methods);
     }
 
-    public override void Serialize(InterfaceDescriptor value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        context.Serialize(value.AssemblyQualifiedName, writer);
-        context.Serialize(value.GenericParameterCount, writer);
-        context.Serialize(value.Methods, writer);
+        context.Serialize(AssemblyQualifiedName, writer);
+        context.Serialize(GenericParameterCount, writer);
+        context.Serialize(Methods, writer);
     }
 }

@@ -1,5 +1,5 @@
 using System.Buffers;
-using System.Diagnostics;
+using System.Net;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
@@ -19,76 +19,8 @@ internal enum MessageType : byte
     GetRemoteIdResponse = 8,
 }
 
-internal abstract class MessageBase
+internal sealed class HandshakeRequestMessage : IBinarySerializable<HandshakeRequestMessage>
 {
-    public abstract MessageType Type { get; }
-
-    protected abstract void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext);
-
-    protected abstract void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext);
-
-    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
-    {
-        writer.Reserve(PackedInt.MaxSize);
-        serializationContext.Serialize(Type, writer);
-        SerializeCore(writer, serializationContext);
-    }
-
-    public void Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
-    {
-        DeserializeCore(ref reader, serializationContext);
-        Debug.Assert(reader.Remaining == 0);
-    }
-
-    public static T ReadMessage<T>(ChunkedArrayPoolBufferWriter<byte> chunks, BinarySerializationContext serializationContext) where T : MessageBase
-    {
-        var reader = chunks.GetReader();
-        return ReadMessage<T>(ref reader, serializationContext);
-    }
-
-    public static T ReadMessage<T>(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext) where T : MessageBase
-    {
-        var type = serializationContext.Deserialize<MessageType>(ref reader);
-        MessageBase message = type switch
-        {
-            MessageType.Error => new ErrorMessage(),
-            MessageType.HandshakeRequest => new HandshakeRequestMessage(),
-            MessageType.HandshakeResponse => new HandshakeResponseMessage(),
-            _ => throw new InvalidDataException(),
-        };
-        Debug.Assert(message.Type == type);
-        message.Deserialize(ref reader, serializationContext);
-        Debug.Assert(reader.Remaining == 0);
-
-        return (T)message;
-    }
-}
-
-internal sealed class ErrorMessage : MessageBase
-{
-    public override MessageType Type => MessageType.Error;
-
-    public ErrorCode ErrorCode { get; set; }
-
-    public string? DetailedMessage { get; set; }
-
-    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
-    {
-        ErrorCode = serializationContext.Deserialize<ErrorCode>(ref reader);
-        DetailedMessage = serializationContext.Deserialize<string>(ref reader);
-    }
-
-    protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
-    {
-        serializationContext.Serialize(ErrorCode, writer);
-        serializationContext.Serialize(DetailedMessage, writer);
-    }
-}
-
-internal sealed class HandshakeRequestMessage : MessageBase
-{
-    public override MessageType Type => MessageType.HandshakeRequest;
-
     /// <summary>
     /// Major version of protocol. Must match on client and server
     /// </summary>
@@ -105,29 +37,36 @@ internal sealed class HandshakeRequestMessage : MessageBase
 
     public InterfaceDescriptor[] Interfaces { get; set; } = [];
 
-    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    public static HandshakeRequestMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
-        ProtocolVersionMajor = serializationContext.Deserialize<int>(ref reader);
-        ProtocolVersionMinor = serializationContext.Deserialize<int>(ref reader);
-        AllowMinorVersionMismatch = serializationContext.Deserialize<bool>(ref reader);
-        SupportedCompressions = serializationContext.Deserialize<string[]>(ref reader);
-        Interfaces = serializationContext.Deserialize<InterfaceDescriptor[]>(ref reader);
+        var messageType = context.Deserialize<MessageType>(ref reader);
+        if (messageType != MessageType.HandshakeRequest)
+        {
+            throw new ProtocolViolationException($"Expected handshake request, got {messageType}");
+        }
+        return new HandshakeRequestMessage
+        {
+            ProtocolVersionMajor = context.Deserialize<int>(ref reader),
+            ProtocolVersionMinor = context.Deserialize<int>(ref reader),
+            AllowMinorVersionMismatch = context.Deserialize<bool>(ref reader),
+            SupportedCompressions = context.Deserialize<string[]>(ref reader),
+            Interfaces = context.Deserialize<InterfaceDescriptor[]>(ref reader),
+        };
     }
 
-    protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
+    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        serializationContext.Serialize(ProtocolVersionMajor, writer);
-        serializationContext.Serialize(ProtocolVersionMinor, writer);
-        serializationContext.Serialize(AllowMinorVersionMismatch, writer);
-        serializationContext.Serialize(SupportedCompressions, writer);
-        serializationContext.Serialize(Interfaces, writer);
+        context.Serialize(MessageType.HandshakeRequest, writer);
+        context.Serialize(ProtocolVersionMajor, writer);
+        context.Serialize(ProtocolVersionMinor, writer);
+        context.Serialize(AllowMinorVersionMismatch, writer);
+        context.Serialize(SupportedCompressions, writer);
+        context.Serialize(Interfaces, writer);
     }
 }
 
-internal sealed class HandshakeResponseMessage : MessageBase
+internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeResponseMessage>
 {
-    public override MessageType Type => MessageType.HandshakeResponse;
-
     public bool IsSuccess => ErrorCode == ErrorCode.Ok;
 
     public ErrorCode ErrorCode { get; set; }
@@ -138,19 +77,28 @@ internal sealed class HandshakeResponseMessage : MessageBase
 
     public InterfaceDescriptor[] Interfaces { get; set; } = [];
 
-    protected override void DeserializeCore(ref SequenceReader<byte> reader, BinarySerializationContext serializationContext)
+    public static HandshakeResponseMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
-        ErrorCode = serializationContext.Deserialize<ErrorCode>(ref reader);
-        IsLittleEndian = serializationContext.Deserialize<bool>(ref reader);
-        ChosenCompression = serializationContext.Deserialize<string?>(ref reader);
-        Interfaces = serializationContext.Deserialize<InterfaceDescriptor[]>(ref reader);
+        var messageType = context.Deserialize<MessageType>(ref reader);
+        if (messageType != MessageType.HandshakeResponse)
+        {
+            throw new ProtocolViolationException($"Expected handshake response, got {messageType}");
+        }
+        return new HandshakeResponseMessage
+        {
+            ErrorCode = context.Deserialize<ErrorCode>(ref reader),
+            IsLittleEndian = context.Deserialize<bool>(ref reader),
+            ChosenCompression = context.Deserialize<string?>(ref reader),
+            Interfaces = context.Deserialize<InterfaceDescriptor[]>(ref reader),
+        };
     }
 
-    protected override void SerializeCore(IBufferWriter<byte> writer, BinarySerializationContext serializationContext)
+    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        serializationContext.Serialize(ErrorCode, writer);
-        serializationContext.Serialize(IsLittleEndian, writer);
-        serializationContext.Serialize(ChosenCompression, writer);
-        serializationContext.Serialize(Interfaces, writer);
+        context.Serialize(MessageType.HandshakeResponse, writer);
+        context.Serialize(ErrorCode, writer);
+        context.Serialize(IsLittleEndian, writer);
+        context.Serialize(ChosenCompression, writer);
+        context.Serialize(Interfaces, writer);
     }
 }

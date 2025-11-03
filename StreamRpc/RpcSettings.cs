@@ -11,8 +11,9 @@ public sealed class RpcSettings
     /// Serializer must implement <see cref="BinarySerializer{T}"/> or <see cref="BinarySerializerFactory"/>.
     /// </summary>
     /// <remarks>
-    /// Type may be attributed with <see cref="BinarySerializerAttribute"/> or <see cref="BinarySerializerAttribute{T}"/>,
-    /// this way it may not be passed here. If type has both attribute and was registered here, this list takes precedence.
+    /// Type may implement <see cref="IBinarySerializable{TSelf}"/> or be attributed
+    /// with <see cref="BinarySerializerAttribute"/> or <see cref="BinarySerializerAttribute{T}"/>,
+    /// this way serializer doesn't have to be passed here. This list takes precedence over other methods.
     /// </remarks>
     public IList<BinarySerializer> Serializers { get; } = new List<BinarySerializer>();
 

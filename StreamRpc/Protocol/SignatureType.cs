@@ -5,8 +5,7 @@ using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
-[BinarySerializer<SignatureTypeBinarySerializer>]
-internal readonly struct SignatureType : IEquatable<SignatureType>
+internal readonly struct SignatureType : IEquatable<SignatureType>, IBinarySerializable<SignatureType>
 {
     public SignatureTypeKind Kind { get; }
 
@@ -61,13 +60,10 @@ internal readonly struct SignatureType : IEquatable<SignatureType>
     public override int GetHashCode()
         => throw ThrowHelper.Fail("This type shouldn't be used inside dictionaries");
 
-    public static bool operator == (SignatureType left, SignatureType right) => left.Equals(right);
-    public static bool operator != (SignatureType left, SignatureType right) => !(left == right);
-}
+    public static bool operator ==(SignatureType left, SignatureType right) => left.Equals(right);
+    public static bool operator !=(SignatureType left, SignatureType right) => !(left == right);
 
-internal sealed class SignatureTypeBinarySerializer : BinarySerializer<SignatureType>
-{
-    public override SignatureType Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    public static SignatureType Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         var kind = (SignatureTypeKind)context.Deserialize<byte>(ref source);
         switch (kind)
@@ -86,17 +82,17 @@ internal sealed class SignatureTypeBinarySerializer : BinarySerializer<Signature
         }
     }
 
-    public override void Serialize(SignatureType value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        context.Serialize((byte)value.Kind, writer);
-        switch (value.Kind)
+        context.Serialize((byte)Kind, writer);
+        switch (Kind)
         {
             case SignatureTypeKind.AssemblyQualified:
-                context.Serialize(value.Type, writer);
+                context.Serialize(Type, writer);
                 break;
             case SignatureTypeKind.MethodIndex:
             case SignatureTypeKind.TypeIndex:
-                context.Serialize(value.Index, writer);
+                context.Serialize(Index, writer);
                 break;
             case SignatureTypeKind.Uninitialized:
                 Debug.Fail("Uninitialized value should not be serialized");

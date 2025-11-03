@@ -26,7 +26,8 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             throw new EndOfStreamException("Could not read handshake request from client");
         }
 
-        var request = MessageBase.ReadMessage<HandshakeRequestMessage>(message, pools.SerializationContext);
+        var reader = message.GetReader();
+        var request = HandshakeRequestMessage.Deserialize(ref reader, pools.SerializationContext);
         message.Reset();
 
         var response = new HandshakeResponseMessage
@@ -45,6 +46,7 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             response.ErrorCode = ErrorCode.ProtocolMinorVersionMismatch;
         }
 
+        message.Reserve(PackedInt.MaxSize);
         response.Serialize(message, pools.SerializationContext);
 
         await StreamHelper.Send(stream,
