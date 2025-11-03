@@ -18,7 +18,7 @@ internal sealed class ConnectionContext
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
     private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = new();
-    private readonly CalleesState _callees;
+    private readonly CalleeOperations _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
     private readonly ConcurrentDictionary<ObjectId, (object Obj, ICalleeFactory Factory)> _idToObj = new();
@@ -38,7 +38,7 @@ internal sealed class ConnectionContext
         SerializationContext = pools.SerializationContext; // keep it closer
         SerializationContext.SetConnection(this);
         _maxConcurrentOperations = settings.MaxConcurrentOperations;
-        _callees = new CalleesState(this, _maxConcurrentOperations);
+        _callees = new CalleeOperations(this, _maxConcurrentOperations);
         _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
     }
 

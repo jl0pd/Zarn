@@ -21,7 +21,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal CancellationTokenSource? Cts;
 
-    internal CalleesState Callees { get; set; } = null!;
+    internal CalleeOperations Callees { get; set; } = null!;
 
     internal ICalleeFactory Factory { get; set; } = null!;
 

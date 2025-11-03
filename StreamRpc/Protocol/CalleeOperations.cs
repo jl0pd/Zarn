@@ -3,7 +3,7 @@ using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class CalleesState(ConnectionContext connection, int maxConcurrentOperations)
+internal sealed class CalleeOperations(ConnectionContext connection, int maxConcurrentOperations)
 {
     public BinarySerializationContext SerializationContext { get; } = connection.SerializationContext;
 
