@@ -25,7 +25,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal CalleesState Callees { get; set; } = null!;
 
-    internal CalleeFactory Factory { get; set; } = null!;
+    internal ICalleeFactory Factory { get; set; } = null!;
 
     internal int MethodSlot { get; set; }
 

@@ -21,7 +21,7 @@ internal sealed class ConnectionContext
     private readonly CalleesState _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
-    private readonly ConcurrentDictionary<ObjectId, (object Obj, CalleeFactory Factory)> _idToObj = new();
+    private readonly ConcurrentDictionary<ObjectId, (object Obj, ICalleeFactory Factory)> _idToObj = new();
 
     public Pools Pools { get; }
 
@@ -94,21 +94,32 @@ internal sealed class ConnectionContext
 
     public object GetInstance(ObjectId id) => _idToObj[id].Obj;
 
-    public CalleeFactory GetCalleeFactory(Type calleeType)
+    public ICalleeFactory GetCalleeFactory(Type calleeType)
     {
-        var simpleType = calleeType.IsConstructedGenericType
-                            ? calleeType.GetGenericTypeDefinition()
-                            : calleeType;
-
-        var factories = Pools.ReverseInvokerFactories;
-
-        foreach (var factory in factories)
+        if (calleeType.IsConstructedGenericType)
         {
-            if (factory.InterfaceType == simpleType)
+            var genArgs = calleeType.GetGenericArguments();
+            var genDef = calleeType.GetGenericTypeDefinition();
+
+            foreach (var factory in Pools.ReverseInvokerFactories)
             {
-                return factory;
+                if (factory.TryGetFactory(genDef, genArgs) is { } f)
+                {
+                    return f;
+                }
             }
         }
+        else
+        {
+            foreach (var factory in Pools.ReverseInvokerFactories)
+            {
+                if (factory.TryGetFactory(calleeType) is { } f)
+                {
+                    return f;
+                }
+            }
+        }
+
 
         throw ThrowHelper.Unreachable;
     }
@@ -267,13 +278,19 @@ internal sealed class ConnectionContext
 
         var factory = Pools.CalleeFactories[typeSlot];
         var calleeType = genericArgs.Length > 0
-            ? factory.ImplementationType.MakeGenericType(genericArgs)
+            ? factory.InterfaceType.MakeGenericType(genericArgs)
             : factory.InterfaceType;
 
         var serviceInstance = _calleeServices.GetService(calleeType)
             ?? throw ThrowHelper.Unreachable; // service must be registered
 
-        var remoteId = RegisterInstance(serviceInstance, factory);
+        var actualFactory = genericArgs.Length == 0
+            ? factory.TryGetFactory(calleeType)
+            : factory.TryGetFactory(factory.InterfaceType, genericArgs);
+
+        Debug.Assert(actualFactory is { });
+
+        var remoteId = RegisterInstance(serviceInstance, actualFactory);
 
         message.Reset();
         message.Reserve(PackedInt.MaxSize);
@@ -283,7 +300,7 @@ internal sealed class ConnectionContext
         Dispatch(message);
     }
 
-    public ObjectId RegisterInstance(object serviceInstance, CalleeFactory factory)
+    public ObjectId RegisterInstance(object serviceInstance, ICalleeFactory factory)
     {
         var remoteId = ObjectId.GenObjectId();
         while (!_idToObj.TryAdd(remoteId, (serviceInstance, factory)))
@@ -320,7 +337,7 @@ internal sealed class ConnectionContext
 
         var (instance, factory) = _idToObj[remoteId];
 
-        CalleeBase callee = factory.GetCallee();
+        CalleeBase callee = factory.Get();
         callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
         if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
         {
