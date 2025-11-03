@@ -13,15 +13,13 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal OperationId OperationId { get; set; }
 
-    internal BinarySerializationContext SerializationContext => Callees.SerializationContext;
-
     internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
 
     internal long ReaderOffset { get; set; }
 
     internal CancellationTokenSource? Cts;
 
-    internal CalleeOperations Callees { get; set; } = null!;
+    public ConnectionContext? Connection { get; set; }
 
     internal ICalleeFactory Factory { get; set; } = null!;
 
@@ -50,10 +48,11 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected T ParseArgument<T>(ref SequenceReader<byte> argumentsReader)
     {
-        var value = SerializationContext.Deserialize<T>(ref argumentsReader);
+        Debug.Assert(Connection is { });
+        var value = Connection.SerializationContext.Deserialize<T>(ref argumentsReader);
         if (argumentsReader.Remaining == 0)
         {
-            Callees.Pools.Return(Arguments);
+            Connection.Pools.Return(Arguments);
             Arguments = null;
         }
         if (typeof(T) == typeof(CancellationToken))
@@ -72,9 +71,36 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         return value;
     }
 
+    private void CompleteResponse(Exception? exception, ChunkedArrayPoolBufferWriter<byte>? returnValue)
+    {
+        Debug.Assert(Connection is { });
+        Connection.CalleeOperations.Remove(this);
+
+        var options = exception is null ? ExecuteResponseOptions.Success : ExecuteResponseOptions.None;
+        var header = Connection.Pools.GetWriter();
+
+        header.Reserve(PackedInt.MaxSize);
+        Connection.SerializationContext.Serialize(MessageType.ExecuteResponse, header);
+        Connection.SerializationContext.Serialize(options, header);
+        Connection.SerializationContext.Serialize(OperationId, header);
+        if (exception is not null)
+        {
+            Connection.SerializationContext.SerializeAny(exception, header);
+        }
+
+        Connection.Dispatch(header, returnValue);
+
+        Connection.Pools.Return(Interlocked.Exchange(ref Cts, null));
+
+        Connection = null;
+
+        Factory.Return(this);
+    }
+
     internal protected void Fail(Exception e)
     {
-        switch (Callees.Connection.Settings.UnhandledExceptionPropagationBehavior)
+        Debug.Assert(Connection is { });
+        switch (Connection.Settings.UnhandledExceptionPropagationBehavior)
         {
             case UnhandledExceptionPropagationBehavior.Hidden:
                 FailCore(new UnhandledRpcException("Internal error has occurred"));
@@ -83,7 +109,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
                 FailCore(e as UnhandledRpcException ?? new UnhandledRpcException(e.ToString()));
                 break;
             case UnhandledExceptionPropagationBehavior.TransparentWrap:
-                FailCore(e as UnhandledRpcException 
+                FailCore(e as UnhandledRpcException
                     ?? new UnhandledRpcException("Unhandled exception has occurred. See InnerException for more details", e));
                 break;
             case UnhandledExceptionPropagationBehavior.TransparentNoWrap:
@@ -94,30 +120,32 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     private void FailCore(Exception e)
     {
-        Callees.CompleteResponse(this, e, null);
+        CompleteResponse(e, null);
     }
 
     internal protected void CompleteVoid()
     {
-        Callees.CompleteResponse(this, null, null);
+        CompleteResponse(null, null);
     }
 
     internal protected void Complete<T>(T value)
     {
-        var writer = Callees.Pools.GetWriter();
-        SerializationContext.Serialize(value, writer);
-        Callees.CompleteResponse(this, null, writer);
+        Debug.Assert(Connection is { });
+        var writer = Connection.Pools.GetWriter();
+        Connection.SerializationContext.Serialize(value, writer);
+        CompleteResponse(null, writer);
     }
 
     internal protected void WaitVoidTask(ValueTask valueTask)
     {
+        Debug.Assert(Connection is { });
         if (valueTask.IsCompleted)
         {
             CompleteVoidTask(valueTask);
         }
         else
         {
-            var worker = Callees.Pools.GetOnCompletedWorker();
+            var worker = Connection.Pools.GetOnCompletedWorker();
             worker.Task = valueTask;
             worker.Callee = this;
             valueTask.GetAwaiter().UnsafeOnCompleted(worker.OnCompleted);
@@ -159,13 +187,14 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal protected void WaitTask<T>(ValueTask<T> valueTask)
     {
+        Debug.Assert(Connection is { });
         if (valueTask.IsCompleted)
         {
             CompleteTask(valueTask);
         }
         else
         {
-            var worker = Callees.Pools.GetOnCompletedWorker<T>();
+            var worker = Connection.Pools.GetOnCompletedWorker<T>();
             worker.Task = valueTask;
             worker.Callee = this;
             valueTask.GetAwaiter().UnsafeOnCompleted(worker.OnCompleted);

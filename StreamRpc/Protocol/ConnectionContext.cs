@@ -18,10 +18,11 @@ internal sealed class ConnectionContext
     private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
     private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = new();
-    private readonly CalleeOperations _callees;
     private readonly SemaphoreSlim _concurrentOperationsSemaphore;
     private readonly int _maxConcurrentOperations;
     private readonly ConcurrentDictionary<ObjectId, (object Obj, ICalleeFactory Factory)> _idToObj = new();
+
+    public CalleeOperations CalleeOperations { get; }
 
     public Pools Pools { get; }
 
@@ -38,7 +39,7 @@ internal sealed class ConnectionContext
         SerializationContext = pools.SerializationContext; // keep it closer
         SerializationContext.SetConnection(this);
         _maxConcurrentOperations = settings.MaxConcurrentOperations;
-        _callees = new CalleeOperations(this, _maxConcurrentOperations);
+        CalleeOperations = new CalleeOperations(_maxConcurrentOperations);
         _concurrentOperationsSemaphore = new(_maxConcurrentOperations, _maxConcurrentOperations);
     }
 
@@ -319,7 +320,7 @@ internal sealed class ConnectionContext
         var opId = SerializationContext.Deserialize<OperationId>(ref reader);
 
         // it's possible for cancellation to arrive after operation is already completed
-        if (_callees.Find(opId) is { } op)
+        if (CalleeOperations.Find(opId) is { } op)
         {
             Interlocked.Exchange(ref op.Cts, null)?.Cancel();
         }
@@ -345,9 +346,9 @@ internal sealed class ConnectionContext
         }
 
         callee.Factory = factory;
-        callee.Callees = _callees;
+        callee.Connection = this;
         callee.OperationId = operationId;
-        if (!_callees.Register(callee))
+        if (!CalleeOperations.Register(callee))
         {
             // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
             // Currently this doesn't happen, and unlikely to happen in future, at least while people won't start
