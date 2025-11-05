@@ -21,9 +21,10 @@ public abstract class RpcTestsBase
 
         await using var client = new RpcClient(RpcStreamProvider.FromStream(clientStream));
 
-        server.Start();
+        var serverClientTask = server.AcceptSingleClient();
 
         await client.ConnectAsync(CancellationToken.None);
+        var serverClient = await serverClientTask;
 
         var remoteImpl = client.GetRemoteService<TInterface>();
         await assert(remoteImpl);
@@ -32,5 +33,10 @@ public abstract class RpcTestsBase
         {
             await assert(remoteImpl);
         }
+
+        await client.DisposeAsync();
+
+        await client.CommunicationEnd;
+        await serverClient.CommunicationEnd;
     }
 }

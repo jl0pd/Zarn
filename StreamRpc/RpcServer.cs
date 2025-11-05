@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using StreamRpc.Protocol;
 using StreamRpc.Serialization;
@@ -13,9 +14,6 @@ public sealed class RpcServer : IAsyncDisposable
     private ServiceProvider? _services;
     private readonly ServiceCollection _serviceDescriptors = [];
 
-    public event EventHandler<ClientConnectedEventArgs>? ClientConnected;
-    public event EventHandler<ThreadExceptionEventArgs>? ExceptionOccurred;
-
     public RpcServer(RpcStreamProvider streamProvider, RpcSettings? settings = null)
     {
         _streamProvider = streamProvider;
@@ -30,53 +28,76 @@ public sealed class RpcServer : IAsyncDisposable
         configure(_serviceDescriptors);
     }
 
-    public void Start()
+    /// <summary>
+    /// Accepts single client. Server cannot be reused after call to this method.
+    /// </summary>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException">
+    /// No clients was accepted due to cancellation request
+    /// or because <see cref="RpcStreamProvider"/> hasn't provided any stream</exception>
+    public async Task<RpcClient> AcceptSingleClient(CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        await foreach (var client in Start(cancellationToken))
+        {
+            cts.Cancel();
+            return client;
+        }
+
+        throw new InvalidOperationException("No clients was accepted");
+    }
+
+    /// <summary>
+    /// Begins accepting <see cref="RpcClient"/>s and returns lazy collection of clients.
+    /// </summary>
+    /// <param name="cancellationToken"></param>
+    /// <returns>Lazy collection that begins accepting new client when next element is requested.</returns>
+    /// <exception cref="InvalidOperationException">Method was called more than once</exception>
+    public async IAsyncEnumerable<RpcClient> Start([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_services is { })
         {
-            throw new InvalidOperationException("Server already has started");
+            throw new InvalidOperationException("Server has already started");
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         _services = _serviceDescriptors.BuildServiceProvider();
 
-        _ = Task.Run(async () =>
+        var interfaceDescriptors = _services
+                                    .GetRequiredService<AllowedRemoteConnections>()
+                                    .Concat(CommunicationServices.Types)
+                                    .Select(InterfaceDescriptor.FromType)
+                                    .ToArray();
+
+        var pools = new Pools(new BinarySerializationContext(_settings));
+
+        using var actualCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
+        var actualCt = actualCts.Token;
+
+        while (!actualCt.IsCancellationRequested)
         {
-            var interfaceDescriptors = _services
-                                        .GetRequiredService<AllowedRemoteConnections>()
-                                        .Concat(CommunicationServices.Types)
-                                        .Select(InterfaceDescriptor.FromType)
-                                        .ToArray();
-
-            var pools = new Pools(new BinarySerializationContext(_settings));
-
-            while (!_cancellationToken.IsCancellationRequested)
+            var stream = await _streamProvider.OpenStreamAsync(actualCt);
+            if (stream is null)
             {
-                var stream = await _streamProvider.OpenStreamAsync(_cancellationToken);
-                if (stream is null)
-                {
-                    return;
-                }
-
-                var scope = _services.CreateAsyncScope();
-                var client = new RpcClient(new ServerRpcClientStrategy(
-                                                    stream,
-                                                    pools,
-                                                    scope,
-                                                    interfaceDescriptors,
-                                                    _settings));
-                await client.ConnectAsync(_cancellationToken);
-                ClientConnected?.Invoke(this, new ClientConnectedEventArgs(client));
+                yield break;
             }
-        })
-        .ContinueWith(
-            x =>
-            {
-                ExceptionOccurred?.Invoke(this, new ThreadExceptionEventArgs(x.Exception!));
-            },
-            TaskContinuationOptions.OnlyOnFaulted);
+
+            var scope = _services.CreateAsyncScope();
+            var client = new RpcClient(new ServerRpcClientStrategy(
+                                                stream,
+                                                pools,
+                                                scope,
+                                                interfaceDescriptors,
+                                                _settings));
+            await client.ConnectAsync(actualCt);
+            yield return client;
+        }
     }
 
-    public void Stop()
+    public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _cts, null) is { } cts)
         {
@@ -85,11 +106,6 @@ public sealed class RpcServer : IAsyncDisposable
         }
 
         _serviceDescriptors.Clear();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Stop();
 
         if (Interlocked.Exchange(ref _services, null) is { } sc)
         {
