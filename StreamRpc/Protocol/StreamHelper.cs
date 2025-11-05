@@ -50,6 +50,8 @@ internal static class StreamHelper
                 await stream.WriteAsync(chunk.WrittenMemory, cancellationToken);
             }
         }
+
+        await stream.FlushAsync(cancellationToken);
     }
 
     public static async ValueTask<bool> Read(Stream stream,

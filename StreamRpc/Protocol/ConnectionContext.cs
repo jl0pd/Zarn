@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Threading.Tasks.Sources;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class ConnectionContext
+internal sealed class ConnectionContext : IAsyncDisposable
 {
     private readonly record struct OutputMessage(
                                         int Length,
@@ -53,6 +54,11 @@ internal sealed class ConnectionContext
         return (T)(object)invoker;
     }
 
+    public ValueTask DisposeAsync()
+    {
+        return _stream.DisposeAsync();
+    }
+
     public async Task SendMessages(CancellationToken cancellationToken)
     {
         Debug.Assert(cancellationToken.CanBeCanceled);
@@ -97,6 +103,8 @@ internal sealed class ConnectionContext
                     }
                 }
 
+                await _stream.FlushAsync(cancellationToken);
+
                 Pools.Return(msg.Header);
                 Pools.Return(msg.Body);
             }
@@ -110,7 +118,17 @@ internal sealed class ConnectionContext
         {
             var writer = Pools.GetWriter();
 
-            int bytesRead = await _stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
+            int bytesRead;
+            try
+            {
+                bytesRead = await _stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
+            }
+            catch
+            {
+                // ignore exception that may be raised when reading from stream
+                // because there's no way to stop pending read in non-destructive way
+                bytesRead = 0;
+            }
             if (bytesRead == 0)
             {
                 Pools.Return(writer);
