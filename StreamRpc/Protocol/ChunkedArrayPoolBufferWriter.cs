@@ -52,6 +52,8 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
 
     public Chunk? LastChunk { get; private set; }
 
+    public bool IsSingleChunk => FirstChunkRequired == LastChunk;
+
     public long TotalLength => LastChunk is { } chunk
                                 ? chunk.RunningIndex + chunk.Written
                                 : 0;

@@ -70,22 +70,80 @@ internal sealed class ConnectionContext : IAsyncDisposable
                 break;
             }
 
+            // TODO: not sure whether it's perfect magic number
+            const int magicThreshold = 65536; 
+
+            var rented = ArrayPool<byte>.Shared.Rent(magicThreshold);
+            int buffered = 0;
+            long unflushed = 0;
+
             while (_outputMessages.TryDequeue(out var msg))
             {
-                long totalLength = msg.TotalLength;
+                // Do not buffer single message that was written in one chunk because it will incur useless copy.
+                // Unfortunately this isn't perfect check, it's still possible to create useless copies
+                // if small and big chunks are placed one after another in following manner: .-.-.-.-.
+                bool shouldBuffer = !_outputMessages.IsEmpty || !msg.IsSingleChunk;
+
                 foreach (var chunk in msg)
                 {
                     var memoryToWrite = chunk.ChunkIndex == 0
-                                        ? StreamHelper.PrepareFirstChunk(totalLength, chunk)
+                                        ? StreamHelper.PrepareFirstChunk(msg.TotalLength, chunk)
                                         : chunk.WrittenMemory;
-                    await _stream.WriteAsync(memoryToWrite, cancellationToken);
+
+                    // if chunk can fit into write-buffer, then buffer it
+                    int memoryLength = memoryToWrite.Length;
+                    if (shouldBuffer && memoryLength <= rented.Length - buffered)
+                    {
+                        memoryToWrite.Span.CopyTo(rented.AsSpan(buffered));
+                        buffered += memoryLength;
+                    }
+                    else
+                    {
+                        // otherwise send buffered data
+                        if (buffered > 0)
+                        {
+                            await _stream.WriteAsync(rented.AsMemory(0, buffered), cancellationToken);
+                            unflushed += buffered;
+                            buffered = 0;
+                        }
+
+                        // Write-buffer overflow may be caused by small chunk.
+                        // If this chunk is actually small then buffer it, otherwise send it right away
+                        if (shouldBuffer && memoryLength <= rented.Length)
+                        {
+                            memoryToWrite.Span.CopyTo(rented.AsSpan(buffered));
+                            buffered += memoryLength;
+                        }
+                        else
+                        {
+                            await _stream.WriteAsync(memoryToWrite, cancellationToken);
+                            unflushed += memoryLength;
+                        }
+
+                        if (unflushed > magicThreshold)
+                        {
+                            await _stream.FlushAsync(cancellationToken);
+                            unflushed = 0;
+                        }
+                    }
                 }
 
                 Pools.Return(msg);
             }
 
+            if (buffered > 0)
+            {
+                await _stream.WriteAsync(rented.AsMemory(0, buffered), cancellationToken);
+                unflushed += buffered;
+            }
 
-            await _stream.FlushAsync(cancellationToken);
+            ArrayPool<byte>.Shared.Return(rented);
+
+            if (unflushed > 0)
+            {
+                await _stream.FlushAsync(cancellationToken);
+                unflushed = 0;
+            }
         }
     }
 
