@@ -1,6 +1,6 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Threading.Tasks.Sources;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
@@ -8,13 +8,8 @@ namespace StreamRpc.Protocol;
 
 internal sealed class ConnectionContext : IAsyncDisposable
 {
-    private readonly record struct OutputMessage(
-                                        int Length,
-                                        ChunkedArrayPoolBufferWriter<byte> Header,
-                                        ChunkedArrayPoolBufferWriter<byte>? Body);
-
     private readonly Stream _stream;
-    private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
+    private readonly ConcurrentQueue<ChunkedArrayPoolBufferWriter<byte>> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
 
     public int MaxConcurrentOperations { get; }
@@ -70,44 +65,27 @@ internal sealed class ConnectionContext : IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             await _outputMessagesEvent.WaitAsync();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             while (_outputMessages.TryDequeue(out var msg))
             {
-                int chunkId = 0;
-                foreach (var chunk in msg.Header)
+                long totalLength = msg.TotalLength;
+                foreach (var chunk in msg)
                 {
-                    ReadOnlyMemory<byte> memoryToWrite;
-                    if (chunkId == 0)
-                    {
-                        int msgBytesLength = PackedInt.GetRequiredSize(msg.Length - PackedInt.MaxSize);
-                        int skipBytes = PackedInt.MaxSize - msgBytesLength;
-                        int written = PackedInt.Write(msg.Length - skipBytes, chunk.Array.AsSpan(skipBytes));
-                        Debug.Assert(written == msgBytesLength);
-                        memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
-                    }
-                    else
-                    {
-                        memoryToWrite = chunk.WrittenMemory;
-                    }
-
+                    var memoryToWrite = chunk.ChunkIndex == 0
+                                        ? StreamHelper.PrepareFirstChunk(totalLength, chunk)
+                                        : chunk.WrittenMemory;
                     await _stream.WriteAsync(memoryToWrite, cancellationToken);
-
-                    chunkId++;
                 }
 
-                if (msg.Body is { })
-                {
-                    foreach (var chunk in msg.Body)
-                    {
-                        await _stream.WriteAsync(chunk.WrittenMemory, cancellationToken);
-                    }
-                }
-
-                await _stream.FlushAsync(cancellationToken);
-
-                Pools.Return(msg.Header);
-                Pools.Return(msg.Body);
+                Pools.Return(msg);
             }
+
+
+            await _stream.FlushAsync(cancellationToken);
         }
     }
 
@@ -273,20 +251,9 @@ internal sealed class ConnectionContext : IAsyncDisposable
         Pools.Return(message);
     }
 
-    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header)
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> message)
     {
-        Dispatch(header, null);
-    }
-
-    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
-    {
-        long length = header.TotalLength;
-        if (body is { })
-        {
-            length += body.TotalLength;
-        }
-
-        _outputMessages.Enqueue(new OutputMessage(checked((int)length), header, body));
+        _outputMessages.Enqueue(message);
         _outputMessagesEvent.Set();
     }
 }

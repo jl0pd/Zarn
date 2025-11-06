@@ -10,6 +10,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
     {
         public T[] Array = [];
         public int Written;
+        public required int ChunkIndex;
 
         public Span<T> WritableSpan => Array.AsSpan(Written);
         public Memory<T> WritableMemory => Array.AsMemory(Written);
@@ -95,7 +96,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
         var currentChunk = LastChunk;
         if (currentChunk is null)
         {
-            FirstChunk = LastChunk = currentChunk = FirstChunk ?? new Chunk();
+            FirstChunk = LastChunk = currentChunk = FirstChunk ?? new Chunk() { ChunkIndex = 0 };
             if (sizeHint > maxPoolSize)
             {
                 currentChunk.Array = new T[sizeHint];
@@ -119,7 +120,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
             }
         }
 
-        var newChunk = currentChunk.Next ?? new Chunk();
+        var newChunk = currentChunk.Next ?? new Chunk() { ChunkIndex = currentChunk.ChunkIndex + 1 };
         currentChunk.SetNext(newChunk);
         newChunk.SetRunningIndex(currentChunk.RunningIndex + currentChunk.Written);
         if (sizeHint > maxPoolSize)
