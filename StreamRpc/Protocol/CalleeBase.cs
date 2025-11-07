@@ -71,7 +71,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         return value;
     }
 
-    private void CompleteResponse(Exception? exception, ChunkedArrayPoolBufferWriter<byte>? returnValue)
+    private ChunkedArrayPoolBufferWriter<byte> CreateResponseMessage(Exception? exception)
     {
         Debug.Assert(Connection is { });
         Connection.CalleeOperations.Remove(this);
@@ -88,12 +88,17 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
             Connection.SerializationContext.SerializeAny(exception, header);
         }
 
-        Connection.Dispatch(header, returnValue);
+        return header;
+    }
+
+    private void SendResponse(ChunkedArrayPoolBufferWriter<byte> header)
+    {
+        Debug.Assert(Connection is { });
+
+        Connection.Dispatch(header);
 
         Connection.Pools.Return(Interlocked.Exchange(ref Cts, null));
-
         Connection = null;
-
         Factory.Return(this);
     }
 
@@ -120,20 +125,20 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     private void FailCore(Exception e)
     {
-        CompleteResponse(e, null);
+         SendResponse(CreateResponseMessage(e));
     }
 
     internal protected void CompleteVoid()
     {
-        CompleteResponse(null, null);
+        SendResponse(CreateResponseMessage(null));
     }
 
     internal protected void Complete<T>(T value)
     {
         Debug.Assert(Connection is { });
-        var writer = Connection.Pools.GetWriter();
-        Connection.SerializationContext.Serialize(value, writer);
-        CompleteResponse(null, writer);
+        var message = CreateResponseMessage(null);
+        Connection.SerializationContext.Serialize(value, message);
+        SendResponse(message);
     }
 
     internal protected void WaitVoidTask(ValueTask valueTask)

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using StreamRpc.Serialization;
@@ -5,15 +6,10 @@ using StreamRpc.Utils;
 
 namespace StreamRpc.Protocol;
 
-internal sealed class ConnectionContext
+internal sealed class ConnectionContext : IAsyncDisposable
 {
-    private readonly record struct OutputMessage(
-                                        int Length,
-                                        ChunkedArrayPoolBufferWriter<byte> Header,
-                                        ChunkedArrayPoolBufferWriter<byte>? Body);
-
     private readonly Stream _stream;
-    private readonly ConcurrentQueue<OutputMessage> _outputMessages = new();
+    private readonly ConcurrentQueue<ChunkedArrayPoolBufferWriter<byte>> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
 
     public int MaxConcurrentOperations { get; }
@@ -53,6 +49,11 @@ internal sealed class ConnectionContext
         return (T)(object)invoker;
     }
 
+    public ValueTask DisposeAsync()
+    {
+        return _stream.DisposeAsync();
+    }
+
     public async Task SendMessages(CancellationToken cancellationToken)
     {
         Debug.Assert(cancellationToken.CanBeCanceled);
@@ -64,41 +65,84 @@ internal sealed class ConnectionContext
         while (!cancellationToken.IsCancellationRequested)
         {
             await _outputMessagesEvent.WaitAsync();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
+            // TODO: not sure whether it's perfect magic number
+            const int magicThreshold = 65536; 
+
+            var rented = ArrayPool<byte>.Shared.Rent(magicThreshold);
+            int buffered = 0;
+            long unflushed = 0;
 
             while (_outputMessages.TryDequeue(out var msg))
             {
-                int chunkId = 0;
-                foreach (var chunk in msg.Header)
+                // Do not buffer single message that was written in one chunk because it will incur useless copy.
+                // Unfortunately this isn't perfect check, it's still possible to create useless copies
+                // if small and big chunks are placed one after another in following manner: .-.-.-.-.
+                bool shouldBuffer = !_outputMessages.IsEmpty || !msg.IsSingleChunk;
+
+                foreach (var chunk in msg)
                 {
-                    ReadOnlyMemory<byte> memoryToWrite;
-                    if (chunkId == 0)
+                    var memoryToWrite = chunk.ChunkIndex == 0
+                                        ? StreamHelper.PrepareFirstChunk(msg.TotalLength, chunk)
+                                        : chunk.WrittenMemory;
+
+                    // if chunk can fit into write-buffer, then buffer it
+                    int memoryLength = memoryToWrite.Length;
+                    if (shouldBuffer && memoryLength <= rented.Length - buffered)
                     {
-                        int msgBytesLength = PackedInt.GetRequiredSize(msg.Length - PackedInt.MaxSize);
-                        int skipBytes = PackedInt.MaxSize - msgBytesLength;
-                        int written = PackedInt.Write(msg.Length - skipBytes, chunk.Array.AsSpan(skipBytes));
-                        Debug.Assert(written == msgBytesLength);
-                        memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
+                        memoryToWrite.Span.CopyTo(rented.AsSpan(buffered));
+                        buffered += memoryLength;
                     }
                     else
                     {
-                        memoryToWrite = chunk.WrittenMemory;
+                        // otherwise send buffered data
+                        if (buffered > 0)
+                        {
+                            await _stream.WriteAsync(rented.AsMemory(0, buffered), cancellationToken);
+                            unflushed += buffered;
+                            buffered = 0;
+                        }
+
+                        // Write-buffer overflow may be caused by small chunk.
+                        // If this chunk is actually small then buffer it, otherwise send it right away
+                        if (shouldBuffer && memoryLength <= rented.Length)
+                        {
+                            memoryToWrite.Span.CopyTo(rented.AsSpan(buffered));
+                            buffered += memoryLength;
+                        }
+                        else
+                        {
+                            await _stream.WriteAsync(memoryToWrite, cancellationToken);
+                            unflushed += memoryLength;
+                        }
+
+                        if (unflushed > magicThreshold)
+                        {
+                            await _stream.FlushAsync(cancellationToken);
+                            unflushed = 0;
+                        }
                     }
-
-                    await _stream.WriteAsync(memoryToWrite, cancellationToken);
-
-                    chunkId++;
                 }
 
-                if (msg.Body is { })
-                {
-                    foreach (var chunk in msg.Body)
-                    {
-                        await _stream.WriteAsync(chunk.WrittenMemory, cancellationToken);
-                    }
-                }
+                Pools.Return(msg);
+            }
 
-                Pools.Return(msg.Header);
-                Pools.Return(msg.Body);
+            if (buffered > 0)
+            {
+                await _stream.WriteAsync(rented.AsMemory(0, buffered), cancellationToken);
+                unflushed += buffered;
+            }
+
+            ArrayPool<byte>.Shared.Return(rented);
+
+            if (unflushed > 0)
+            {
+                await _stream.FlushAsync(cancellationToken);
+                unflushed = 0;
             }
         }
     }
@@ -110,7 +154,17 @@ internal sealed class ConnectionContext
         {
             var writer = Pools.GetWriter();
 
-            int bytesRead = await _stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
+            int bytesRead;
+            try
+            {
+                bytesRead = await _stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
+            }
+            catch
+            {
+                // ignore exception that may be raised when reading from stream
+                // because there's no way to stop pending read in non-destructive way
+                bytesRead = 0;
+            }
             if (bytesRead == 0)
             {
                 Pools.Return(writer);
@@ -126,7 +180,7 @@ internal sealed class ConnectionContext
                     if (read == 0)
                     {
                         Pools.Return(writer);
-                        return;
+                        ThrowHelper.ThrowEndOfStream();
                     }
                     bytesRead += read;
                 }
@@ -143,7 +197,7 @@ internal sealed class ConnectionContext
                 if (read == 0)
                 {
                     Pools.Return(writer);
-                    return;
+                    ThrowHelper.ThrowEndOfStream();
                 }
 
                 bytesRead += read;
@@ -255,20 +309,9 @@ internal sealed class ConnectionContext
         Pools.Return(message);
     }
 
-    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header)
+    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> message)
     {
-        Dispatch(header, null);
-    }
-
-    public void Dispatch(ChunkedArrayPoolBufferWriter<byte> header, ChunkedArrayPoolBufferWriter<byte>? body)
-    {
-        long length = header.TotalLength;
-        if (body is { })
-        {
-            length += body.TotalLength;
-        }
-
-        _outputMessages.Enqueue(new OutputMessage(checked((int)length), header, body));
+        _outputMessages.Enqueue(message);
         _outputMessagesEvent.Set();
     }
 }

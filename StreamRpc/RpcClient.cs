@@ -11,6 +11,13 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
     private readonly IRpcClientStrategy _strategy;
     private CancellationTokenSource? _cts;
 
+    /// <summary>
+    /// Task that can be used to wait for communication to end.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">An attempt to get task was made while client has not started yet</exception>
+    public Task CommunicationEnd
+        => _connectionTask ?? throw new InvalidOperationException("Communication has not started yet");
+
     public RpcClient(RpcStreamProvider streamProvider, RpcSettings? settings = null)
     : this(new ClientRpcClientStrategy(streamProvider, settings))
     {
@@ -30,19 +37,34 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
 
         await ThreadingHelper.LeaveContext();
 
-        _cts = cancellationToken.CanBeCanceled
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                : new CancellationTokenSource();
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var token = _cts.Token;
 
         _connection = await _strategy.ConnectAsync(token);
-        _connectionTask = Task.WhenAll(_connection.SendMessages(token),
-                                       _connection.ReadMessages(token));
+
+        var sendTask = _connection.SendMessages(token);
+        var readTask = _connection.ReadMessages(token);
+
+        DisposeIfAnyCompleted(readTask, sendTask);
+
+        _connectionTask = Task.WhenAll(sendTask, readTask);
         if (_connectionTask.IsCompleted)
         {
             await _connectionTask; // it has failed
         }
+    }
+
+    private async void DisposeIfAnyCompleted(Task first, Task second)
+    {
+        try
+        {
+            await Task.WhenAny(first, second);
+        }
+        catch
+        {
+        }
+        await DisposeAsync();
     }
 
     public void ConfigureServices(Action<IServiceCollection> configure)
@@ -52,12 +74,16 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
 
     public async ValueTask DisposeAsync()
     {
-        await _strategy.DisposeAsync();
-        _connection = null;
         if (Interlocked.Exchange(ref _cts, null) is { } cts)
         {
             await cts.CancelAsync();
             cts.Dispose();
+        }
+        await _strategy.DisposeAsync();
+        if (_connection is { } con)
+        {
+            await con.DisposeAsync();
+            _connection = null;
         }
         if (_connectionTask is { } connTask)
         {

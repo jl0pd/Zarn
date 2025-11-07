@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Benchmarks.Grpc";
+
+package calculator;
+
+service Calculator {
+    rpc Add (BinaryOperationRequest) returns (BinaryOperationResult);
+    rpc AddStreaming (stream BinaryOperationRequest) returns (stream BinaryOperationResult);
+}
+
+message BinaryOperationRequest {
+    int32 left = 1;
+    int32 right = 2;
+}
+
+message BinaryOperationResult {
+    int32 result = 1;
+}

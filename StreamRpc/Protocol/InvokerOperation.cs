@@ -164,7 +164,7 @@ internal abstract class InvokerOperation
         writer.Reserve(PackedInt.MaxSize);
         SerializationContext.Serialize(MessageType.ExecuteCancel, writer);
         SerializationContext.Serialize(new OperationId(Invoker.Id, Token), writer);
-        Connection.Dispatch(writer, null);
+        Connection.Dispatch(writer);
     }
 }
 

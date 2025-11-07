@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
@@ -8,48 +7,25 @@ namespace StreamRpc.Protocol;
 // If method is updated here, it must be updated inside ConnectionContext and vise-versa
 internal static class StreamHelper
 {
-    public static ValueTask Send(Stream stream,
-                                 ChunkedArrayPoolBufferWriter<byte> header,
-                                 CancellationToken cancellationToken)
+    public static ReadOnlyMemory<byte> PrepareFirstChunk(long totalLength, ChunkedArrayPoolBufferWriter<byte>.Chunk chunk)
     {
-        return Send(stream, header.TotalLength, header, null, cancellationToken);
+        int skipBytes = PackedInt.MaxSize - PackedInt.GetRequiredSize(totalLength - PackedInt.MaxSize);
+        PackedInt.Write(totalLength - skipBytes, chunk.Array.AsSpan(skipBytes));
+        return chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
     }
 
     public static async ValueTask Send(Stream stream,
-                                       long length,
-                                       ChunkedArrayPoolBufferWriter<byte> header,
-                                       ChunkedArrayPoolBufferWriter<byte>? body,
+                                       ChunkedArrayPoolBufferWriter<byte> message,
                                        CancellationToken cancellationToken)
     {
-        int chunkId = 0;
-        foreach (var chunk in header)
+        foreach (var chunk in message)
         {
-            ReadOnlyMemory<byte> memoryToWrite;
-            if (chunkId == 0)
-            {
-                int msgBytesLength = PackedInt.GetRequiredSize(length - PackedInt.MaxSize);
-                int skipBytes = PackedInt.MaxSize - msgBytesLength;
-                int written = PackedInt.Write(length - skipBytes, chunk.Array.AsSpan(skipBytes));
-                Debug.Assert(written == msgBytesLength);
-                memoryToWrite = chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
-            }
-            else
-            {
-                memoryToWrite = chunk.WrittenMemory;
-            }
-
+            var memoryToWrite = chunk.ChunkIndex == 0
+                                ? PrepareFirstChunk(message.TotalLength, chunk)
+                                : chunk.WrittenMemory;
             await stream.WriteAsync(memoryToWrite, cancellationToken);
-
-            chunkId++;
         }
-
-        if (body is { })
-        {
-            foreach (var chunk in body)
-            {
-                await stream.WriteAsync(chunk.WrittenMemory, cancellationToken);
-            }
-        }
+        await stream.FlushAsync(cancellationToken);
     }
 
     public static async ValueTask<bool> Read(Stream stream,
