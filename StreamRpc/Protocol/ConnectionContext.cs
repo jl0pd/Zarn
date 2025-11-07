@@ -180,7 +180,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
                     if (read == 0)
                     {
                         Pools.Return(writer);
-                        return;
+                        ThrowHelper.ThrowEndOfStream();
                     }
                     bytesRead += read;
                 }
@@ -197,7 +197,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
                 if (read == 0)
                 {
                     Pools.Return(writer);
-                    return;
+                    ThrowHelper.ThrowEndOfStream();
                 }
 
                 bytesRead += read;

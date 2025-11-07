@@ -17,6 +17,12 @@ internal static class ThrowHelper
     }
 
     [DoesNotReturn]
+    public static void ThrowEndOfStream()
+    {
+        throw new EndOfStreamException();
+    }
+
+    [DoesNotReturn]
     [ExcludeFromCodeCoverage]
     public static Exception Fail(string message)
     {
