@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Benchmarks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\calculator.proto" GrpcServices="Server" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.57.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Benchmarks.Base\Benchmarks.Base.csproj" />
+    <ProjectReference Include="..\StreamRpc.AspNetCore\StreamRpc.AspNetCore.csproj" />
+    <ProjectReference Include="..\StreamRpc.Tests\StreamRpc.Tests.csproj" />
+    <ProjectReference Include="..\StreamRpc\StreamRpc.csproj" />
+  </ItemGroup>
+
+</Project>

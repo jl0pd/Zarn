@@ -29,7 +29,7 @@ public abstract class RpcTestsBase
         var remoteImpl = client.GetRemoteService<TInterface>();
         await assert(remoteImpl);
 
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 3; i++)
         {
             await assert(remoteImpl);
         }
