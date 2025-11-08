@@ -25,7 +25,6 @@ internal abstract class InvokerBase
     {
         var op = State.Connection.Pools.GetInvokerOperation<T>();
         op.Invoker = State;
-        op.Prepare();
         return op;
     }
 
@@ -33,7 +32,6 @@ internal abstract class InvokerBase
     {
         var op = State.Connection.Pools.GetInvokerOperation();
         op.Invoker = State;
-        op.Prepare();
         return op;
     }
 

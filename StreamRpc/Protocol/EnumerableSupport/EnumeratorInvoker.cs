@@ -14,7 +14,6 @@ internal sealed class EnumeratorInvoker<T> : FinalizableInvokerBase, IEnumerator
     {
         var op = State.Connection.Pools.GetMoveNextInvokerOperation<T>();
         op.Invoker = State;
-        op.Prepare();
         return op;
     }
 
@@ -35,35 +34,40 @@ internal sealed class EnumeratorInvoker<T> : FinalizableInvokerBase, IEnumerator
     public void Dispose()
     {
         var op = CreateVoidOperation();
-        op.SerializeArg((int)EnumeratorMethod.Dispose);
+        op.MethodSlot = (int)EnumeratorMethod.Dispose;
+        op.Prepare();
         SynchronousWaitVoidResult(op.Start());
     }
 
     public ValueTask DisposeAsync()
     {
         var op = CreateVoidOperation();
-        op.SerializeArg((int)EnumeratorMethod.DisposeAsync);
+        op.MethodSlot = (int)EnumeratorMethod.DisposeAsync;
+        op.Prepare();
         return op.Start();
     }
 
     public bool MoveNext()
     {
         var op = CreateMoveNextOperation();
-        op.SerializeArg((int)EnumeratorMethod.MoveNext);
+        op.MethodSlot = (int)EnumeratorMethod.MoveNext;
+        op.Prepare();
         return SynchronousWaitResult(op.Start(this));
     }
 
     public ValueTask<bool> MoveNextAsync()
     {
         var op = CreateMoveNextOperation();
-        op.SerializeArg((int)EnumeratorMethod.MoveNextAsync);
+        op.MethodSlot = (int)EnumeratorMethod.MoveNextAsync;
+        op.Prepare();
         return op.Start(this);
     }
 
     public void Reset()
     {
         var op = CreateVoidOperation();
-        op.SerializeArg((int)EnumeratorMethod.Reset);
+        op.MethodSlot = (int)EnumeratorMethod.Reset;
+        op.Prepare();
         SynchronousWaitVoidResult(op.Start());
     }
 }

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
@@ -71,7 +72,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
             }
 
             // TODO: not sure whether it's perfect magic number
-            const int magicThreshold = 65536; 
+            const int magicThreshold = 65536;
 
             var rented = ArrayPool<byte>.Shared.Rent(magicThreshold);
             int buffered = 0;
@@ -245,28 +246,25 @@ internal sealed class ConnectionContext : IAsyncDisposable
         }
     }
 
-    private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
     {
-        var reader = message.GetReader();
-        var options = (ExecuteRequestOptions)reader.UnreadSpan[1];
+        Unsafe.SkipInit(out ExecuteRequestMessage message);
 
-        reader.Advance(2);
+        message.Deserialize(messageBuffer, SerializationContext);
 
-        var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
-        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
-
-        var descriptor = InstanceManager.GetDescriptor(remoteId);
+        var descriptor = InstanceManager.GetDescriptor(message.RemoteId);
 
         CalleeBase callee = descriptor.CalleeFactory.Get();
-        callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
-        if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
-        {
-            callee.GenericMethodArgs = SerializationContext.Deserialize<Type[]>(ref reader);
-        }
-
+        callee.MethodSlot = message.MethodSlot;
+        callee.GenericMethodArgs = message.GenericMethodArgs;
         callee.Factory = descriptor.CalleeFactory;
         callee.Connection = this;
-        callee.OperationId = operationId;
+        callee.OperationId = message.OperationId;
+        callee.Arguments = messageBuffer;
+        callee.Impl = descriptor.Instance;
+        callee.ReaderOffset = message.ReaderOffset;
+        callee.Cts = Pools.GetCts();
+
         if (!CalleeOperations.Register(callee))
         {
             // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
@@ -275,10 +273,6 @@ internal sealed class ConnectionContext : IAsyncDisposable
             Debug.Fail("not implemented");
             throw new NotImplementedException();
         }
-        callee.Arguments = message;
-        callee.Impl = descriptor.Instance;
-        callee.ReaderOffset = reader.Consumed;
-        callee.Cts = Pools.GetCts();
 
         ThreadPool.UnsafeQueueUserWorkItem(callee, false);
     }
