@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using StreamRpc.Compression;
 using StreamRpc.Serialization;
 
 namespace StreamRpc;
@@ -16,8 +17,6 @@ public sealed class RpcSettings
     /// this way serializer doesn't have to be passed here. This list takes precedence over other methods.
     /// </remarks>
     public IList<BinarySerializer> Serializers { get; } = new List<BinarySerializer>();
-
-    public MemoryProvider? MemoryProvider { get; set; }
 
     /// <summary>
     /// List of exceptions that are propagated to caller from remote without wrapping.

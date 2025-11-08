@@ -24,7 +24,6 @@ public sealed class BinarySerializationContext
         { typeof(byte[]), ByteArrayBinarySerializer.Instance },
         { typeof(object[]), ObjectArrayBinarySerializer.Instance },
         { typeof(CancellationToken), CancellationTokenBinarySerializer.Instance },
-        { typeof(ReadOnlyMemory<byte>), ByteReadOnlyMemoryBinarySerializer.Instance },
     };
 
     private readonly List<BinarySerializerFactory> _factories =
@@ -84,12 +83,8 @@ public sealed class BinarySerializationContext
     private readonly JsonBinarySerializerFactory _jsonFactory = new();
     private readonly StrongBox<ConnectionContext?> _connection = new();
 
-    private readonly MemoryProvider? _memoryProvider;
-
     public BinarySerializationContext(RpcSettings settings)
     {
-        _memoryProvider = settings.MemoryProvider;
-
         foreach (var serializer in settings.Serializers)
         {
             if (serializer is BinarySerializerFactory factory)
@@ -278,10 +273,4 @@ public sealed class BinarySerializationContext
             return (T)serializer.Deserialize(typeof(T), ref source, this)!;
         }
     }
-
-    public IMemoryOwner<byte> ToMemory(ReadOnlySequence<byte> source)
-        => _memoryProvider?.ToMemory(source) ?? new ArrayMemoryOwner<byte>(source.ToArray());
-
-    public IMemoryOwner<byte> ToMemory(ReadOnlySpan<byte> source)
-        => _memoryProvider?.ToMemory(source) ?? new ArrayMemoryOwner<byte>(source.ToArray());
 }
