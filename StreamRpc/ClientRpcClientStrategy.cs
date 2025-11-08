@@ -20,6 +20,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
     {
         _streamProvider = streamProvider;
         _settings = settings ?? new();
+        _settings.Freeze();
         _serializationContext = new BinarySerializationContext(_settings);
         _pools = new Pools(_serializationContext);
         _serviceCollection.AddSingleton(new AllowedRemoteConnections());

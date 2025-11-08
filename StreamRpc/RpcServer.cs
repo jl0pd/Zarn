@@ -18,6 +18,7 @@ public sealed class RpcServer : IAsyncDisposable
     {
         _streamProvider = streamProvider;
         _settings = settings ?? new();
+        _settings.Freeze();
         _cancellationToken = _cts.Token;
 
         _serviceDescriptors.AddSingleton(new AllowedRemoteConnections());
