@@ -1,12 +1,14 @@
 using System.ComponentModel;
-using StreamRpc.Compression;
+using System.Runtime.CompilerServices;
 using StreamRpc.Serialization;
+using StreamRpc.Utils;
 
 namespace StreamRpc;
 
-// TODO: freeze instance
-public sealed class RpcSettings
+public sealed class RpcSettings : ICloneable
 {
+    private readonly StrongBox<bool> _isFrozen = new(false);
+
     /// <summary>
     /// List of serializers for user-provided types.
     /// Serializer must implement <see cref="BinarySerializer{T}"/> or <see cref="BinarySerializerFactory"/>.
@@ -16,13 +18,13 @@ public sealed class RpcSettings
     /// with <see cref="BinarySerializerAttribute"/> or <see cref="BinarySerializerAttribute{T}"/>,
     /// this way serializer doesn't have to be passed here. This list takes precedence over other methods.
     /// </remarks>
-    public IList<BinarySerializer> Serializers { get; } = new List<BinarySerializer>();
+    public IList<BinarySerializer> Serializers { get; }
 
     /// <summary>
     /// List of exceptions that are propagated to caller from remote without wrapping.
     /// Exception type must exactly match.
     /// </summary>
-    public IList<Type> TransparentExceptions { get; } = BinarySerializationContext.ExceptionSerializers.Keys.ToList();
+    public IList<Type> TransparentExceptions { get; }
 
     /// <summary>
     /// Indicates whether communication is allowed when protocol version has changed in insignificant way.
@@ -31,7 +33,16 @@ public sealed class RpcSettings
     /// Client and server cannot communicate when major version is different.
     /// Defaults to <see langword="true"/>.
     /// </summary>
-    public bool AllowMinorVersionMismatch { get; set; } = true;
+    public bool AllowMinorVersionMismatch
+    {
+        get => _allowMinorVersionMismatch;
+        set
+        {
+            ThrowIfFrozen();
+            _allowMinorVersionMismatch = value;
+        }
+    }
+    private bool _allowMinorVersionMismatch = true;
 
     /// <summary>
     /// Limits maximum concurrent operations that can be made.
@@ -46,6 +57,7 @@ public sealed class RpcSettings
         get => _maxConcurrentOperations;
         set
         {
+            ThrowIfFrozen();
             ArgumentOutOfRangeException.ThrowIfLessThan(value, 1);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(value, 65536);
             _maxConcurrentOperations = value;
@@ -62,6 +74,7 @@ public sealed class RpcSettings
         get => _unhandledExceptionPropagationBehavior;
         set
         {
+            ThrowIfFrozen();
             if (value is <= UnhandledExceptionPropagationBehavior.Hidden or > UnhandledExceptionPropagationBehavior.TransparentNoWrap)
             {
                 throw new InvalidEnumArgumentException(nameof(value), (int)value, typeof(UnhandledExceptionPropagationBehavior));
@@ -70,4 +83,55 @@ public sealed class RpcSettings
         }
     }
     private UnhandledExceptionPropagationBehavior _unhandledExceptionPropagationBehavior = UnhandledExceptionPropagationBehavior.TransparentNoWrap;
+
+    public RpcSettings()
+    {
+        Serializers = new FreezableList<BinarySerializer>(_isFrozen);
+        TransparentExceptions = new FreezableList<Type>(_isFrozen, BinarySerializationContext.ExceptionSerializers.Keys);
+    }
+
+    /// <summary>
+    /// Freezes current instance so it cannot be modified.
+    /// Instance is automatically frozen when it's passed into <see cref="RpcServer(RpcStreamProvider, RpcSettings?)"/>
+    /// or <see cref="RpcClient(RpcStreamProvider, RpcSettings?)"/>.
+    /// </summary>
+    public void Freeze()
+    {
+        _isFrozen.Value = true;
+    }
+
+    /// <summary>
+    /// Returns new unfrozen copy of this instance.
+    /// </summary>
+    public RpcSettings Clone()
+    {
+        var result = new RpcSettings
+        {
+            _allowMinorVersionMismatch = _allowMinorVersionMismatch,
+            _maxConcurrentOperations = _maxConcurrentOperations,
+            _unhandledExceptionPropagationBehavior = _unhandledExceptionPropagationBehavior
+        };
+
+        foreach (var item in Serializers)
+        {
+            result.Serializers.Add(item);
+        }
+
+        foreach (var item in TransparentExceptions)
+        {
+            result.TransparentExceptions.Add(item);
+        }
+
+        return result;
+    }
+
+    object ICloneable.Clone() => Clone();
+
+    private void ThrowIfFrozen()
+    {
+        if (_isFrozen.Value)
+        {
+            throw new InvalidOperationException("Current instance is frozen and cannot be modified");
+        }
+    }
 }
