@@ -48,6 +48,12 @@ internal sealed class Pools
     private readonly Cache<ChunkedArrayPoolBufferWriter<byte>> _writerPool = new(() => new ChunkedArrayPoolBufferWriter<byte>(4096, 65536));
     private readonly Cache<CancellationTokenSource> _ctsPool = new(() => new(), x => x.Dispose());
     private readonly ConcurrentDictionary<Type, Cache<InvokerOperation>> _invokerOperationsCache = new();
+    private readonly Cache<ExecuteRequestDispatcher> _executeRequestDispatcherPool = new(() => new ExecuteRequestDispatcher());
+
+    public ExecuteRequestDispatcher GetExecuteRequestDispatcher()
+    {
+        return _executeRequestDispatcherPool.Get();
+    }
 
     public VoidOnCompletedWorker GetOnCompletedWorker()
     {
@@ -138,6 +144,10 @@ internal sealed class Pools
         }
     }
 
+    public void Return(ExecuteRequestDispatcher dispatcher)
+    {
+        _executeRequestDispatcherPool.Return(dispatcher);
+    }
 
     private static List<InterfaceDescriptor> GetAllInterfaces(InterfaceDescriptor[] descriptors)
     {

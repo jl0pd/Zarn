@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
@@ -248,33 +247,11 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
     private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
     {
-        Unsafe.SkipInit(out ExecuteRequestMessage message);
+        var dispatcher = Pools.GetExecuteRequestDispatcher();
+        dispatcher.MessageBuffer = messageBuffer;
+        dispatcher.Connection = this;
 
-        message.Deserialize(messageBuffer, SerializationContext);
-
-        var descriptor = InstanceManager.GetDescriptor(message.RemoteId);
-
-        CalleeBase callee = descriptor.CalleeFactory.Get();
-        callee.MethodSlot = message.MethodSlot;
-        callee.GenericMethodArgs = message.GenericMethodArgs;
-        callee.Factory = descriptor.CalleeFactory;
-        callee.Connection = this;
-        callee.OperationId = message.OperationId;
-        callee.Arguments = messageBuffer;
-        callee.Impl = descriptor.Instance;
-        callee.ReaderOffset = message.ReaderOffset;
-        callee.Cts = Pools.GetCts();
-
-        if (!CalleeOperations.Register(callee))
-        {
-            // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
-            // Currently this doesn't happen, and unlikely to happen in future, at least while people won't start
-            // implementing own libs to talk to this
-            Debug.Fail("not implemented");
-            throw new NotImplementedException();
-        }
-
-        ThreadPool.UnsafeQueueUserWorkItem(callee, false);
+        ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
     private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> message)

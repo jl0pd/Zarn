@@ -5,7 +5,7 @@ using StreamRpc.TypeGeneration;
 
 namespace StreamRpc.Protocol;
 
-internal abstract class CalleeBase : IThreadPoolWorkItem
+internal abstract class CalleeBase
 {
     internal abstract object Impl { get; set; }
 
