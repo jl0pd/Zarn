@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using StreamRpc.Compression;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
 
@@ -19,6 +20,17 @@ public sealed class RpcSettings : ICloneable
     /// this way serializer doesn't have to be passed here. This list takes precedence over other methods.
     /// </remarks>
     public IList<BinarySerializer> Serializers { get; }
+
+    /// <summary>
+    /// List of <see cref="CompressionProvider"/>s that are used during communication if both parties support same algorithm.
+    /// Providers at start of list has higher priority.
+    /// </summary>
+    /// <remarks>
+    /// List may be cleared to disable compression, useful in scenarios when underlying stream already does compression.
+    /// Compression is not enabled by default. <see cref="BrotliCompressionProvider"/> or custom implementation
+    /// can be added if needed.
+    /// </remarks>
+    public IList<CompressionProvider> CompressionProviders { get; }
 
     /// <summary>
     /// List of exceptions that are propagated to caller from remote without wrapping.
@@ -88,6 +100,7 @@ public sealed class RpcSettings : ICloneable
     {
         Serializers = new FreezableList<BinarySerializer>(_isFrozen);
         TransparentExceptions = new FreezableList<Type>(_isFrozen, BinarySerializationContext.ExceptionSerializers.Keys);
+        CompressionProviders = new FreezableList<CompressionProvider>(_isFrozen);
     }
 
     /// <summary>

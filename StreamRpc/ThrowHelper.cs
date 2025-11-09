@@ -23,6 +23,12 @@ internal static class ThrowHelper
     }
 
     [DoesNotReturn]
+    public static void ThrowInvalidData()
+    {
+        throw new InvalidDataException();
+    }
+
+    [DoesNotReturn]
     [ExcludeFromCodeCoverage]
     public static Exception Fail(string message)
     {
