@@ -1,7 +1,8 @@
-using System.IO.Compression;
-
 namespace StreamRpc.Compression;
 
+/// <summary>
+/// Base type for providing compression support during RPC communication.
+/// </summary>
 public abstract class CompressionProvider
 {
     /// <summary>
@@ -9,7 +10,7 @@ public abstract class CompressionProvider
     /// </summary>
     public abstract string AlgorithmName { get; }
 
-    public abstract ICompressor CreateCompressor(CompressionLevel compressionLevel);
+    public abstract ICompressor CreateCompressor();
 
     public abstract IDecompressor CreateDecompressor();
 }

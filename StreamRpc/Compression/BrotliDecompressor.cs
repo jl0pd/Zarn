@@ -3,9 +3,9 @@ using System.IO.Compression;
 
 namespace StreamRpc.Compression;
 
+// source is adapted from System.IO.Compression.BrotliStream
 public sealed class BrotliDecompressor : IDecompressor
 {
-    // adapted from System.IO.Compression.BrotliStream
     public void Decompress(ReadOnlySequence<byte> source, IBufferWriter<byte> destination)
     {
         if (source.IsEmpty)

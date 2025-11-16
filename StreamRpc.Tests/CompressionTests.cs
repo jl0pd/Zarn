@@ -8,7 +8,7 @@ namespace StreamRpc.Tests;
 
 public sealed class CompressionTests
 {
-    private static CompressionLevel[] s_levels =
+    private static readonly CompressionLevel[] s_levels =
     [
         CompressionLevel.Optimal,
         CompressionLevel.Fastest,
@@ -22,13 +22,13 @@ public sealed class CompressionTests
     [InlineData("another text")]
     public void Roundtrip(string text)
     {
-        var provider = (CompressionProvider)new BrotliCompressionProvider();
-
-        var utf8Bytes = Encoding.UTF8.GetBytes(text);
-        var decompressor = provider.CreateDecompressor();
         foreach (var level in s_levels)
         {
-            var compressor = provider.CreateCompressor(level);
+            var provider = (CompressionProvider)new BrotliCompressionProvider(level);
+
+            var utf8Bytes = Encoding.UTF8.GetBytes(text);
+            var decompressor = provider.CreateDecompressor();
+            var compressor = provider.CreateCompressor();
 
             for (int i = 1; i < utf8Bytes.Length; i++)
             {

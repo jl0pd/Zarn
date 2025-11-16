@@ -4,18 +4,28 @@ using System.IO.Compression;
 
 namespace StreamRpc.Compression;
 
-public sealed class BrotliCompressor(CompressionLevel compressionLevel) : ICompressor
+// source is adapted from System.IO.Compression.BrotliStream
+/// <summary>
+/// </summary>
+/// <param name="quality">A number representing quality of the Brotli compression. 
+/// 0 is the minimum (no compression), 11 is the maximum.</param>
+/// <param name="window">A number representing the encoder window bits.
+/// The minimum value is 10, and the maximum value is 24</param>
+public sealed class BrotliCompressor(int quality, int window) : ICompressor
 {
-    // source is adapted from System.IO.Compression.BrotliStream
+    // 22 is taken from BrotliEncoder.TryCompress
+    public BrotliCompressor(CompressionLevel level) : this(GetQuality(level), 22)
+    {
+    }
 
-    private readonly int _level = compressionLevel switch
+    private static int GetQuality(CompressionLevel level) => level switch
     {
         CompressionLevel.Optimal => 4,
         CompressionLevel.Fastest => 1,
         CompressionLevel.NoCompression => 0,
         CompressionLevel.SmallestSize => 11,
-        _ => throw new InvalidEnumArgumentException(nameof(compressionLevel),
-                                                    (int)compressionLevel,
+        _ => throw new InvalidEnumArgumentException(nameof(level),
+                                                    (int)level,
                                                     typeof(CompressionLevel)),
     };
 
@@ -27,7 +37,7 @@ public sealed class BrotliCompressor(CompressionLevel compressionLevel) : ICompr
         }
 
         // cannot pass `using var` by reference
-        var encoder = new BrotliEncoder(_level, 11);
+        var encoder = new BrotliEncoder(quality, window);
         var buffer = ArrayPool<byte>.Shared.Rent(8192);
         try
         {
