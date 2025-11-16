@@ -31,9 +31,7 @@ internal sealed class EnumeratorCallee<T> : CalleeBase
 
     protected internal override void DispatchCore(ref SequenceReader<byte> argumentsReader, int methodSlot)
     {
-        Debug.Assert(argumentsReader.End && Connection is { });
-        Connection.Pools.Return(Arguments);
-        Arguments = null;
+        Debug.Assert(argumentsReader.End);
 
         switch ((EnumeratorMethod)(methodSlot + 1))
         {

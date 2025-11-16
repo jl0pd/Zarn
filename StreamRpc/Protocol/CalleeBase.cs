@@ -13,28 +13,19 @@ internal abstract class CalleeBase
 
     internal OperationId OperationId { get; set; }
 
-    internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
-
-    internal long ReaderOffset { get; set; }
-
     internal CancellationTokenSource? Cts;
 
     public ConnectionContext? Connection { get; set; }
 
     internal ICalleeFactory Factory { get; set; } = null!;
 
-    internal int MethodSlot { get; set; }
-
     internal Type[]? GenericMethodArgs { get; set; }
 
-    public void Execute()
+    public void Dispatch(ref SequenceReader<byte> reader, int methodSlot)
     {
         try
         {
-            Debug.Assert(Arguments is { });
-            var reader = Arguments.GetReader();
-            reader.Advance(ReaderOffset);
-            DispatchCore(ref reader, MethodSlot - 1);
+            DispatchCore(ref reader, methodSlot);
         }
         catch (Exception ex)
         {
@@ -50,11 +41,6 @@ internal abstract class CalleeBase
     {
         Debug.Assert(Connection is { });
         var value = Connection.SerializationContext.Deserialize<T>(ref argumentsReader);
-        if (argumentsReader.Remaining == 0)
-        {
-            Connection.Pools.Return(Arguments);
-            Arguments = null;
-        }
         if (typeof(T) == typeof(CancellationToken))
         {
             if (((CancellationToken)(object)value!).IsCancellationRequested)

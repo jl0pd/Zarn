@@ -24,30 +24,21 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
 
         Unsafe.SkipInit(out ExecuteRequestMessage message);
 
-        long readerOffset = message.Deserialize(messageBuffer,
-                                                connection.SerializationContext,
-                                                connection.Pools,
-                                                out var uncompressed);
-
-        if (uncompressed is { })
-        {
-            connection.Pools.Return(messageBuffer);
-            messageBuffer = uncompressed;
-        }
+        var reader = message.Deserialize(messageBuffer,
+                                         connection.SerializationContext,
+                                         connection.Pools,
+                                         out var uncompressed);
 
         try
         {
             var descriptor = connection.InstanceManager.GetDescriptor(message.RemoteId);
 
             CalleeBase callee = descriptor.CalleeFactory.Get();
-            callee.MethodSlot = message.MethodSlot;
             callee.GenericMethodArgs = message.GenericMethodArgs;
             callee.Factory = descriptor.CalleeFactory;
             callee.Connection = connection;
             callee.OperationId = message.OperationId;
-            callee.Arguments = messageBuffer;
             callee.Impl = descriptor.Instance;
-            callee.ReaderOffset = readerOffset;
             callee.Cts = connection.Pools.GetCts();
 
             if (!connection.CalleeOperations.Register(callee))
@@ -59,7 +50,7 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
                 throw new NotImplementedException();
             }
 
-            callee.Execute();
+            callee.Dispatch(ref reader, message.MethodSlot - 1);
         }
         catch (Exception e)
         {
@@ -67,5 +58,8 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
             // TODO: send Fail message
             Environment.FailFast(null, e);
         }
+
+        connection.Pools.Return(messageBuffer);
+        connection.Pools.Return(uncompressed);
     }
 }

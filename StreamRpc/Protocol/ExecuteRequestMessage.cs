@@ -19,10 +19,10 @@ internal struct ExecuteRequestMessage
                                           + OperationId.Size
                                           + ObjectId.Size;
 
-    public long Deserialize(ChunkedArrayPoolBufferWriter<byte> message,
-                            BinarySerializationContext context,
-                            Pools pools,
-                            out ChunkedArrayPoolBufferWriter<byte>? uncompressed)
+    public SequenceReader<byte> Deserialize(ChunkedArrayPoolBufferWriter<byte> message,
+                                            BinarySerializationContext context,
+                                            Pools pools,
+                                            out ChunkedArrayPoolBufferWriter<byte>? uncompressed)
     {
         var reader = message.GetReader();
         DeserializeHeader(ref reader, context);
@@ -31,7 +31,7 @@ internal struct ExecuteRequestMessage
         {
             DeserializeRest(ref reader, context);
             uncompressed = null;
-            return reader.Consumed;
+            return reader;
         }
         else
         {
@@ -43,7 +43,7 @@ internal struct ExecuteRequestMessage
             var uncompressedReader = uncompressed.GetReader();
             DeserializeRest(ref uncompressedReader, context);
 
-            return uncompressedReader.Consumed;
+            return uncompressedReader;
         }
     }
 
