@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using StreamRpc.Compression;
 using StreamRpc.Protocol;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
@@ -20,6 +22,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
     {
         _streamProvider = streamProvider;
         _settings = settings ?? new();
+        _settings.Freeze();
         _serializationContext = new BinarySerializationContext(_settings);
         _pools = new Pools(_serializationContext);
         _serviceCollection.AddSingleton(new AllowedRemoteConnections());
@@ -32,7 +35,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
     public async ValueTask<ConnectionContext> ConnectAsync(CancellationToken cancellationToken)
     {
-        var stream = await _streamProvider.OpenStreamAsync(cancellationToken) 
+        var stream = await _streamProvider.OpenStreamAsync(cancellationToken)
             ?? throw new InvalidOperationException(nameof(RpcStreamProvider) + " has returned null");
         try
         {
@@ -55,7 +58,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         {
             ProtocolVersionMajor = 1,
             ProtocolVersionMinor = 0,
-            SupportedCompressions = [],
+            SupportedCompressions = _settings.CompressionProviders.Select(x => x.AlgorithmName).ToArray(),
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
             Interfaces = Services
                             .GetRequiredService<AllowedRemoteConnections>()
@@ -89,12 +92,29 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             throw new NotSupportedException("Server has different endianness");
         }
 
-        if (response.ChosenCompression != null)
+        var compressionProvider = GetCompression(response.ChosenCompression);
+
+        var pools = new Pools(_pools, request.Interfaces, response.Interfaces, compressionProvider);
+        return new ConnectionContext(stream, pools, _settings, Services);
+    }
+
+    [return: NotNullIfNotNull(nameof(name))]
+    private CompressionProvider? GetCompression(string? name)
+    {
+        if (name is { })
         {
-            throw new NotSupportedException("Server request compression, which is not currently supported");
+            foreach (var provider in _settings.CompressionProviders)
+            {
+                if (provider.AlgorithmName == name)
+                {
+                    return provider;
+                }
+            }
+
+            throw new InvalidOperationException($"Server has returned unsupported compression algorithm: {name}");
         }
 
-        return new ConnectionContext(stream, new Pools(_pools, request.Interfaces, response.Interfaces), _settings, Services);
+        return null;
     }
 
     public ValueTask DisposeAsync()

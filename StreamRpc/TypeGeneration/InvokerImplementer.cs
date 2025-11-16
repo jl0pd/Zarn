@@ -18,6 +18,9 @@ internal static class InvokerImplementer
     private static readonly MethodInfo InvokerBase_SynchronousWaitVoidResult;
     private static readonly MethodInfo InvokerBase_GetMethodSlot;
     private static readonly MethodInfo InvokerOperation_SerializeArgT;
+    private static readonly MethodInfo InvokerOperation_SetMethodSlot;
+    private static readonly MethodInfo InvokerOperation_SetGenericMethodArgs;
+    private static readonly MethodInfo InvokerOperation_Prepare;
     private static readonly MethodInfo InvokerOperation_SetCancellationToken;
     private static readonly MethodInfo InvokerOperationT_Start;
     private static readonly MethodInfo VoidInvokerOperation_Start;
@@ -44,6 +47,9 @@ internal static class InvokerImplementer
         InvokerBase_GetMethodSlot = invokerBase.GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
 
         InvokerOperation_SerializeArgT = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.SerializeArg))!;
+        InvokerOperation_SetMethodSlot = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.MethodSlot))!.GetSetMethod()!;
+        InvokerOperation_SetGenericMethodArgs = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.GenericMethodArgs))!.GetSetMethod()!;
+        InvokerOperation_Prepare = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.Prepare))!;
         InvokerOperation_SetCancellationToken = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.CancellationToken))!.GetSetMethod()!;
         InvokerOperationT_Start = typeof(InvokerOperation<>).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation<int>.Start))!;
         VoidInvokerOperation_Start = typeof(VoidInvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(VoidInvokerOperation.Start))!;
@@ -96,13 +102,13 @@ internal static class InvokerImplementer
             op.CancellationToken = argCancellationToken;
         }
 
-        op.SerializeArg<int>(base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod)));
+        op.MethodSlot = base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod));
         if (methodIsGeneric)
         {
             op.MessageOptions |= MessageOptions.GenericMethod;
-            op.SerializeArg<Type>(methodArg[0]);
-            op.SerializeArg<Type>(methodArg[N]);
+            op.GenericMethodArgs = [methodGenArg[0], methodGenArg[1]];
         }
+        op.Prepare();
 
         op.SerializeArg<arg1Type>(arg1);
         op.SerializeArg<arg2Type>(arg2);
@@ -158,12 +164,13 @@ internal static class InvokerImplementer
 
         if (cancellationTokenParameter is { })
         {
+            // op.CancellationToken = cancellationTokenArg;
             il.Emit(OpCodes.Ldloc, opLocal);
             il.Emit(OpCodes.Ldarg, cancellationTokenParameter.Position + 1);
             il.Emit(OpCodes.Call, InvokerOperation_SetCancellationToken);
         }
 
-        // base.SerializationContext.Serialize(base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod)), bufferWriter);
+        // op.MethodSlot = base.GetMethodSlot(_methodInfo ??= methodof(interfaceMethod));
         il.Emit(OpCodes.Ldloc, opLocal);
         il.Emit(OpCodes.Ldarg_0);
         {
@@ -184,12 +191,16 @@ internal static class InvokerImplementer
             il.MarkLabel(ifNotNull);
         }
         il.Emit(OpCodes.Call, InvokerBase_GetMethodSlot);
-        il.Emit(OpCodes.Call, InvokerOperation_SerializeArgT.MakeGenericMethod(typeof(int)));
+        il.Emit(OpCodes.Call, InvokerOperation_SetMethodSlot);
 
         if (method.IsGenericMethod)
         {
             throw new NotImplementedException();
         }
+
+        // op.Prepare();
+        il.Emit(OpCodes.Ldloc, opLocal);
+        il.Emit(OpCodes.Call, InvokerOperation_Prepare);
 
         for (int i = 0; i < parameters.Length; i++)
         {

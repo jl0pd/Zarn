@@ -5,7 +5,7 @@ using StreamRpc.TypeGeneration;
 
 namespace StreamRpc.Protocol;
 
-internal abstract class CalleeBase : IThreadPoolWorkItem
+internal abstract class CalleeBase
 {
     internal abstract object Impl { get; set; }
 
@@ -13,28 +13,19 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     internal OperationId OperationId { get; set; }
 
-    internal ChunkedArrayPoolBufferWriter<byte>? Arguments { get; set; }
-
-    internal long ReaderOffset { get; set; }
-
     internal CancellationTokenSource? Cts;
 
     public ConnectionContext? Connection { get; set; }
 
     internal ICalleeFactory Factory { get; set; } = null!;
 
-    internal int MethodSlot { get; set; }
-
     internal Type[]? GenericMethodArgs { get; set; }
 
-    public void Execute()
+    public void Dispatch(ref SequenceReader<byte> reader, int methodSlot)
     {
         try
         {
-            Debug.Assert(Arguments is { });
-            var reader = Arguments.GetReader();
-            reader.Advance(ReaderOffset);
-            DispatchCore(ref reader, MethodSlot - 1);
+            DispatchCore(ref reader, methodSlot);
         }
         catch (Exception ex)
         {
@@ -50,11 +41,6 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     {
         Debug.Assert(Connection is { });
         var value = Connection.SerializationContext.Deserialize<T>(ref argumentsReader);
-        if (argumentsReader.Remaining == 0)
-        {
-            Connection.Pools.Return(Arguments);
-            Arguments = null;
-        }
         if (typeof(T) == typeof(CancellationToken))
         {
             if (((CancellationToken)(object)value!).IsCancellationRequested)
@@ -76,7 +62,16 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         Debug.Assert(Connection is { });
         Connection.CalleeOperations.Remove(this);
 
-        var options = exception is null ? ExecuteResponseOptions.Success : ExecuteResponseOptions.None;
+        var options = ExecuteResponseOptions.None;
+        if (exception is null)
+        {
+            options |= ExecuteResponseOptions.Success;
+        }
+        if (Connection.Pools.CompressionProvider is { })
+        {
+            options |= ExecuteResponseOptions.Compressed;
+        }
+
         var header = Connection.Pools.GetWriter();
 
         header.Reserve(PackedInt.MaxSize);
@@ -85,7 +80,20 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
         Connection.SerializationContext.Serialize(OperationId, header);
         if (exception is not null)
         {
-            Connection.SerializationContext.SerializeAny(exception, header);
+            if (Connection.Pools.TryGetCompressor() is { } compressor)
+            {
+                var compressedWriter = Connection.Pools.GetWriter();
+                Connection.SerializationContext.SerializeAny(exception, compressedWriter);
+
+                compressor.Compress(compressedWriter.GetSequence(), header);
+
+                Connection.Pools.Return(compressedWriter);
+                Connection.Pools.Return(compressor);
+            }
+            else
+            {
+                Connection.SerializationContext.SerializeAny(exception, header);
+            }
         }
 
         return header;
@@ -125,7 +133,7 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
 
     private void FailCore(Exception e)
     {
-         SendResponse(CreateResponseMessage(e));
+        SendResponse(CreateResponseMessage(e));
     }
 
     internal protected void CompleteVoid()
@@ -137,7 +145,22 @@ internal abstract class CalleeBase : IThreadPoolWorkItem
     {
         Debug.Assert(Connection is { });
         var message = CreateResponseMessage(null);
-        Connection.SerializationContext.Serialize(value, message);
+
+        if (Connection.Pools.TryGetCompressor() is { } compressor)
+        {
+            var compressedWriter = Connection.Pools.GetWriter();
+            Connection.SerializationContext.Serialize(value, compressedWriter);
+
+            compressor.Compress(compressedWriter.GetSequence(), message);
+
+            Connection.Pools.Return(compressedWriter);
+            Connection.Pools.Return(compressor);
+        }
+        else
+        {
+            Connection.SerializationContext.Serialize(value, message);
+        }
+
         SendResponse(message);
     }
 

@@ -47,7 +47,7 @@ internal static class StreamHelper
                 var read = await stream.ReadAsync(initialBuffer.AsMemory(bytesRead, headerLength - bytesRead), cancellationToken);
                 if (read == 0)
                 {
-                    return false;
+                    ThrowHelper.ThrowEndOfStream();
                 }
                 bytesRead += read;
             }
@@ -63,7 +63,7 @@ internal static class StreamHelper
             var read = await stream.ReadAsync(message[bytesRead..payloadLength], cancellationToken);
             if (read == 0)
             {
-                return false;
+                ThrowHelper.ThrowEndOfStream();
             }
 
             bytesRead += read;

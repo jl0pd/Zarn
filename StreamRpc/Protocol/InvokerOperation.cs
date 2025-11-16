@@ -1,7 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using System.Runtime.ExceptionServices;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks.Sources;
 using StreamRpc.Serialization;
 
@@ -24,13 +22,31 @@ internal abstract class InvokerOperation
 
     public ChunkedArrayPoolBufferWriter<byte>? RequestWriter { get; set; }
 
-    public ExecuteRequestOptions RequestOptions { get; set; }
+    public ExecuteRequestOptions RequestOptions
+    {
+        get => _message.Options;
+        set => _message.Options = value;
+    }
+
+    public int MethodSlot
+    {
+        get => _message.MethodSlot;
+        set => _message.MethodSlot = value;
+    }
+
+    public Type[]? GenericMethodArgs
+    {
+        get => _message.GenericMethodArgs;
+        set => _message.GenericMethodArgs = value;
+    }
 
     private int _isResultSet = 0;
 
     private Task? _waitForFreeOperationSlot;
     private Action? _startCoreAction;
     private Action? _onRemoteIdReadyAction;
+
+    private ExecuteRequestMessage _message;
 
     public Pools? Reset()
     {
@@ -48,10 +64,13 @@ internal abstract class InvokerOperation
         SerializationContext = Connection.SerializationContext;
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageType.ExecuteRequest, writer);
-        SerializationContext.Serialize(ExecuteRequestOptions.None, writer);
-        writer.Reserve(OperationId.Size);
-        writer.Reserve(ObjectId.Size);
+        if (Connection.Pools.CompressionProvider is { })
+        {
+            RequestOptions |= ExecuteRequestOptions.Compressed;
+        }
+        _message.Serialize(writer, SerializationContext);
+        RequestOptions = ExecuteRequestOptions.None;
+        GenericMethodArgs = null;
         RequestWriter = writer;
     }
 
@@ -102,8 +121,7 @@ internal abstract class InvokerOperation
             }
             catch (Exception e)
             {
-                var info = ExceptionDispatchInfo.Capture(e);
-                Complete(info.SourceException);
+                Complete(e);
                 return;
             }
         }
@@ -114,17 +132,17 @@ internal abstract class InvokerOperation
 
         var writer = RequestWriter;
         RequestWriter = null;
-        var ar = writer.FirstChunkRequired.Array;
 
-        var targetSpan = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType));
-        MemoryMarshal.Write(targetSpan, RequestOptions);
+        ExecuteRequestMessage.ReplacePlaceholders(writer, Invoker.Id, Token, Invoker.RemoteId.GetAwaiter().GetResult());
 
-        targetSpan = targetSpan[1..];
-
-        MemoryMarshal.Write(targetSpan, new OperationId(Invoker.Id, Token));
-        targetSpan = targetSpan[OperationId.Size..];
-
-        MemoryMarshal.Write(targetSpan, Invoker.RemoteId.GetAwaiter().GetResult());
+        if (Connection.Pools.TryGetCompressor() is { } compressor)
+        {
+            var compressedWriter = Connection.Pools.GetWriter();
+            ExecuteRequestMessage.Compress(writer, compressor, compressedWriter);
+            Connection.Pools.Return(writer);
+            Connection.Pools.Return(compressor);
+            writer = compressedWriter;
+        }
 
         if (CancellationToken.CanBeCanceled)
         {

@@ -31,7 +31,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
 
     public ReadOnlySequence<T> GetSequence()
     {
-        if (FirstChunk is null)
+        if (FirstChunk is null || FirstChunk.Written == 0)
         {
             return default;
         }
@@ -43,7 +43,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
             current.SetMemory();
         }
 
-        return (new ReadOnlySequence<T>(FirstChunk, 0, LastChunk, LastChunk.Written));
+        return new ReadOnlySequence<T>(FirstChunk, 0, LastChunk, LastChunk.Written);
     }
 
     public Chunk FirstChunkRequired => FirstChunk ?? throw ThrowHelper.Unreachable;

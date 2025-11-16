@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Nerdbank.Streams;
+using StreamRpc.Compression;
 
 namespace StreamRpc.Tests;
 
@@ -9,9 +10,23 @@ public abstract class RpcTestsBase
     where TImpl : class, TInterface
     where TInterface : class
     {
+        await RunConnectToServerTestCore<TInterface, TImpl>(assert, new RpcSettings());
+        await RunConnectToServerTestCore<TInterface, TImpl>(assert, new RpcSettings()
+        {
+            CompressionProviders =
+            {
+                new BrotliCompressionProvider(System.IO.Compression.CompressionLevel.SmallestSize),
+            }
+        });
+    }
+
+    protected static async Task RunConnectToServerTestCore<TInterface, TImpl>(Func<TInterface, Task> assert, RpcSettings settings)
+    where TImpl : class, TInterface
+    where TInterface : class
+    {
         var (serverStream, clientStream) = FullDuplexStream.CreatePair();
 
-        await using var server = new RpcServer(RpcStreamProvider.FromStream(serverStream));
+        await using var server = new RpcServer(RpcStreamProvider.FromStream(serverStream), settings);
 
         server.ConfigureServices(services =>
         {
@@ -19,7 +34,7 @@ public abstract class RpcTestsBase
             services.AllowRemoteConnection<TInterface>();
         });
 
-        await using var client = new RpcClient(RpcStreamProvider.FromStream(clientStream));
+        await using var client = new RpcClient(RpcStreamProvider.FromStream(clientStream), settings);
 
         var serverClientTask = server.AcceptSingleClient();
 

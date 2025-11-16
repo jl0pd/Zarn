@@ -21,18 +21,18 @@ internal sealed class HandshakeRequestMessage : IBinarySerializable<HandshakeReq
     /// <summary>
     /// Major version of protocol. Must match on client and server
     /// </summary>
-    public int ProtocolVersionMajor { get; set; }
+    public required int ProtocolVersionMajor { get; set; }
 
     /// <summary>
     /// Minor version of protocol. May mismatch if <see cref="AllowMinorVersionMismatch"/> is set.
     /// </summary>
-    public int ProtocolVersionMinor { get; set; }
+    public required int ProtocolVersionMinor { get; set; }
 
-    public bool AllowMinorVersionMismatch { get; set; }
+    public required bool AllowMinorVersionMismatch { get; set; }
 
-    public string[] SupportedCompressions { get; set; } = [];
+    public required string[] SupportedCompressions { get; set; } = [];
 
-    public InterfaceDescriptor[] Interfaces { get; set; } = [];
+    public required InterfaceDescriptor[] Interfaces { get; set; } = [];
 
     public static HandshakeRequestMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
@@ -66,13 +66,13 @@ internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeRe
 {
     public bool IsSuccess => ErrorCode == ErrorCode.Ok;
 
-    public ErrorCode ErrorCode { get; set; }
+    public required ErrorCode ErrorCode { get; set; }
 
-    public bool IsLittleEndian { get; set; }
+    public required bool IsLittleEndian { get; set; }
 
-    public string? ChosenCompression { get; set; }
+    public required string? ChosenCompression { get; set; }
 
-    public InterfaceDescriptor[] Interfaces { get; set; } = [];
+    public required InterfaceDescriptor[] Interfaces { get; set; } = [];
 
     public static HandshakeResponseMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {

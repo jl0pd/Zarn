@@ -71,7 +71,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
             }
 
             // TODO: not sure whether it's perfect magic number
-            const int magicThreshold = 65536; 
+            const int magicThreshold = 65536;
 
             var rented = ArrayPool<byte>.Shared.Rent(magicThreshold);
             int buffered = 0;
@@ -245,68 +245,22 @@ internal sealed class ConnectionContext : IAsyncDisposable
         }
     }
 
-    private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
     {
-        var reader = message.GetReader();
-        var options = (ExecuteRequestOptions)reader.UnreadSpan[1];
+        var dispatcher = Pools.GetExecuteRequestDispatcher();
+        dispatcher.MessageBuffer = messageBuffer;
+        dispatcher.Connection = this;
 
-        reader.Advance(2);
-
-        var operationId = SerializationContext.Deserialize<OperationId>(ref reader);
-        var remoteId = SerializationContext.Deserialize<ObjectId>(ref reader);
-
-        var descriptor = InstanceManager.GetDescriptor(remoteId);
-
-        CalleeBase callee = descriptor.CalleeFactory.Get();
-        callee.MethodSlot = SerializationContext.Deserialize<int>(ref reader);
-        if (options.HasFlag(ExecuteRequestOptions.GenericMethod))
-        {
-            callee.GenericMethodArgs = SerializationContext.Deserialize<Type[]>(ref reader);
-        }
-
-        callee.Factory = descriptor.CalleeFactory;
-        callee.Connection = this;
-        callee.OperationId = operationId;
-        if (!CalleeOperations.Register(callee))
-        {
-            // TODO: handle case when caller does more than `MaxConcurrentOperations` calls at same time.
-            // Currently this doesn't happen, and unlikely to happen in future, at least while people won't start
-            // implementing own libs to talk to this
-            Debug.Fail("not implemented");
-            throw new NotImplementedException();
-        }
-        callee.Arguments = message;
-        callee.Impl = descriptor.Instance;
-        callee.ReaderOffset = reader.Consumed;
-        callee.Cts = Pools.GetCts();
-
-        ThreadPool.UnsafeQueueUserWorkItem(callee, false);
+        ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
-    private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> message)
+    private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
     {
-        var reader = message.GetReader();
-        reader.Advance(2);
+        var dispatcher = Pools.GetExecuteResponseDispatcher();
+        dispatcher.MessageBuffer = messageBuffer;
+        dispatcher.Connection = this;
 
-        var opId = SerializationContext.Deserialize<OperationId>(ref reader);
-
-        var invoker = InstanceManager.GetInvokerState(opId.Target);
-
-        var options = (ExecuteResponseOptions)message.FirstChunkRequired.Array[1];
-        if (options.HasFlag(ExecuteResponseOptions.Success))
-        {
-            invoker.Complete(opId.Id, ref reader);
-        }
-        else
-        {
-            var ex = (Exception?)SerializationContext.DeserializeAny(ref reader);
-            Debug.Assert(ex is { });
-            invoker.Complete(opId.Id, ex);
-        }
-
-        Debug.Assert(reader.Remaining == 0);
-
-        Pools.Return(message);
+        ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
     public void Dispatch(ChunkedArrayPoolBufferWriter<byte> message)
