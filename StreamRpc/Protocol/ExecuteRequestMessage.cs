@@ -35,9 +35,9 @@ internal struct ExecuteRequestMessage
         }
         else
         {
-            var decompressor = pools.GetDecompressor() ?? throw ThrowHelper.Unreachable;
+            var decompressor = pools.TryGetDecompressor() ?? throw ThrowHelper.Unreachable;
             uncompressed = pools.GetWriter();
-            decompressor.Decompress(reader.Sequence.Slice(reader.Consumed), uncompressed);
+            decompressor.Decompress(reader.UnreadSequence, uncompressed);
             pools.Return(decompressor);
 
             var uncompressedReader = uncompressed.GetReader();

@@ -254,30 +254,13 @@ internal sealed class ConnectionContext : IAsyncDisposable
         ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
-    private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> message)
+    private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
     {
-        var reader = message.GetReader();
-        reader.Advance(2);
+        var dispatcher = Pools.GetExecuteResponseDispatcher();
+        dispatcher.MessageBuffer = messageBuffer;
+        dispatcher.Connection = this;
 
-        var opId = SerializationContext.Deserialize<OperationId>(ref reader);
-
-        var invoker = InstanceManager.GetInvokerState(opId.Target);
-
-        var options = (ExecuteResponseOptions)message.FirstChunkRequired.Array[1];
-        if (options.HasFlag(ExecuteResponseOptions.Success))
-        {
-            invoker.Complete(opId.Id, ref reader);
-        }
-        else
-        {
-            var ex = (Exception?)SerializationContext.DeserializeAny(ref reader);
-            Debug.Assert(ex is { });
-            invoker.Complete(opId.Id, ex);
-        }
-
-        Debug.Assert(reader.Remaining == 0);
-
-        Pools.Return(message);
+        ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
     public void Dispatch(ChunkedArrayPoolBufferWriter<byte> message)

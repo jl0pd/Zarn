@@ -63,16 +63,22 @@ internal sealed class Pools
     private readonly Cache<CancellationTokenSource> _ctsPool = new(() => new(), x => x.Dispose());
     private readonly ConcurrentDictionary<Type, Cache<InvokerOperation>> _invokerOperationsCache = new();
     private readonly Cache<ExecuteRequestDispatcher> _executeRequestDispatcherPool = new(() => new ExecuteRequestDispatcher());
+    private readonly Cache<ExecuteResponseDispatcher> _executeResponseDispatcherPool = new(() => new ExecuteResponseDispatcher());
     private readonly Cache<ICompressor>? _compressorPool;
     private readonly Cache<IDecompressor>? _decompressorPool;
 
-    public ICompressor? GetCompressor() => _compressorPool?.Get();
+    public ICompressor? TryGetCompressor() => _compressorPool?.Get();
 
-    public IDecompressor? GetDecompressor() => _decompressorPool?.Get();
+    public IDecompressor? TryGetDecompressor() => _decompressorPool?.Get();
 
     public ExecuteRequestDispatcher GetExecuteRequestDispatcher()
     {
         return _executeRequestDispatcherPool.Get();
+    }
+
+    public ExecuteResponseDispatcher GetExecuteResponseDispatcher()
+    {
+        return _executeResponseDispatcherPool.Get();
     }
 
     public VoidOnCompletedWorker GetOnCompletedWorker()
@@ -167,6 +173,11 @@ internal sealed class Pools
     public void Return(ExecuteRequestDispatcher dispatcher)
     {
         _executeRequestDispatcherPool.Return(dispatcher);
+    }
+
+    public void Return(ExecuteResponseDispatcher dispatcher)
+    {
+        _executeResponseDispatcherPool.Return(dispatcher);
     }
 
     public void Return(ICompressor compressor)

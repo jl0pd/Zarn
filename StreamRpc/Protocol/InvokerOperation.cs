@@ -135,7 +135,7 @@ internal abstract class InvokerOperation
 
         ExecuteRequestMessage.ReplacePlaceholders(writer, Invoker.Id, Token, Invoker.RemoteId.GetAwaiter().GetResult());
 
-        if (Connection.Pools.GetCompressor() is { } compressor)
+        if (Connection.Pools.TryGetCompressor() is { } compressor)
         {
             var compressedWriter = Connection.Pools.GetWriter();
             ExecuteRequestMessage.Compress(writer, compressor, compressedWriter);
