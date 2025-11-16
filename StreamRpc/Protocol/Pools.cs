@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using StreamRpc.Compression;
 using StreamRpc.Protocol.EnumerableSupport;
 using StreamRpc.Serialization;
 using StreamRpc.TypeGeneration;
@@ -20,7 +22,10 @@ internal sealed class Pools
         ReverseInvokerFactories = [];
     }
 
-    public Pools(Pools pools, InterfaceDescriptor[] calleeDescriptors, InterfaceDescriptor[] invokerDescriptors)
+    public Pools(Pools pools,
+                 InterfaceDescriptor[] calleeDescriptors,
+                 InterfaceDescriptor[] invokerDescriptors,
+                 CompressionProvider? compressionProvider)
     {
         var allCalleeDescriptors = GetAllInterfaces(calleeDescriptors);
         CalleeFactories = allCalleeDescriptors.Select(x => new CalleeFactory(x)).ToArray();
@@ -34,6 +39,13 @@ internal sealed class Pools
         _onCompletedCache = pools._onCompletedCache;
         _writerPool = pools._writerPool;
         _ctsPool = pools._ctsPool;
+
+        if (compressionProvider is { })
+        {
+            CompressionProvider = compressionProvider;
+            _compressorPool = new Cache<ICompressor>(Environment.ProcessorCount, compressionProvider.CreateCompressor, x => x.Dispose());
+            _decompressorPool = new Cache<IDecompressor>(Environment.ProcessorCount, compressionProvider.CreateDecompressor, x => x.Dispose());
+        }
     }
 
     public CalleeFactory[] CalleeFactories { get; }
@@ -42,6 +54,8 @@ internal sealed class Pools
     public InvokerFactory[] InvokerFactories { get; }
     public CalleeFactory[] ReverseInvokerFactories { get; }
 
+    public CompressionProvider? CompressionProvider { get; }
+
     public BinarySerializationContext SerializationContext { get; }
 
     private readonly ConcurrentDictionary<Type, Cache<OnCompletedWorker>> _onCompletedCache = new();
@@ -49,6 +63,12 @@ internal sealed class Pools
     private readonly Cache<CancellationTokenSource> _ctsPool = new(() => new(), x => x.Dispose());
     private readonly ConcurrentDictionary<Type, Cache<InvokerOperation>> _invokerOperationsCache = new();
     private readonly Cache<ExecuteRequestDispatcher> _executeRequestDispatcherPool = new(() => new ExecuteRequestDispatcher());
+    private readonly Cache<ICompressor>? _compressorPool;
+    private readonly Cache<IDecompressor>? _decompressorPool;
+
+    public ICompressor? GetCompressor() => _compressorPool?.Get();
+
+    public IDecompressor? GetDecompressor() => _decompressorPool?.Get();
 
     public ExecuteRequestDispatcher GetExecuteRequestDispatcher()
     {
@@ -147,6 +167,18 @@ internal sealed class Pools
     public void Return(ExecuteRequestDispatcher dispatcher)
     {
         _executeRequestDispatcherPool.Return(dispatcher);
+    }
+
+    public void Return(ICompressor compressor)
+    {
+        Debug.Assert(_compressorPool is { });
+        _compressorPool.Return(compressor);
+    }
+
+    public void Return(IDecompressor decompressor)
+    {
+        Debug.Assert(_decompressorPool is { });
+        _decompressorPool.Return(decompressor);
     }
 
     private static List<InterfaceDescriptor> GetAllInterfaces(InterfaceDescriptor[] descriptors)

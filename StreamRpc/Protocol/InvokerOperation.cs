@@ -1,7 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using System.Runtime.ExceptionServices;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks.Sources;
 using StreamRpc.Serialization;
 
@@ -66,7 +64,12 @@ internal abstract class InvokerOperation
         SerializationContext = Connection.SerializationContext;
         var writer = Connection.Pools.GetWriter();
         writer.Reserve(PackedInt.MaxSize);
+        if (Connection.Pools.CompressionProvider is { })
+        {
+            RequestOptions |= ExecuteRequestOptions.Compressed;
+        }
         _message.Serialize(writer, SerializationContext);
+        RequestOptions = ExecuteRequestOptions.None;
         GenericMethodArgs = null;
         RequestWriter = writer;
     }
@@ -118,8 +121,7 @@ internal abstract class InvokerOperation
             }
             catch (Exception e)
             {
-                var info = ExceptionDispatchInfo.Capture(e);
-                Complete(info.SourceException);
+                Complete(e);
                 return;
             }
         }
@@ -132,6 +134,15 @@ internal abstract class InvokerOperation
         RequestWriter = null;
 
         ExecuteRequestMessage.ReplacePlaceholders(writer, Invoker.Id, Token, Invoker.RemoteId.GetAwaiter().GetResult());
+
+        if (Connection.Pools.GetCompressor() is { } compressor)
+        {
+            var compressedWriter = Connection.Pools.GetWriter();
+            ExecuteRequestMessage.Compress(writer, compressor, compressedWriter);
+            Connection.Pools.Return(writer);
+            Connection.Pools.Return(compressor);
+            writer = compressedWriter;
+        }
 
         if (CancellationToken.CanBeCanceled)
         {

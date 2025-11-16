@@ -9,6 +9,7 @@ internal enum ExecuteRequestOptions : byte
     /// Target method is generic
     /// </summary>
     GenericMethod = 0x01,
+    Compressed = 0x02,
 }
 
 [Flags]
@@ -17,4 +18,5 @@ internal enum ExecuteResponseOptions : byte
     None = 0,
 
     Success = 0x01,
+    Compressed = 0x02,
 }

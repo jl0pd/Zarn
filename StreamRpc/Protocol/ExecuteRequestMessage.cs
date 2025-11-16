@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using StreamRpc.Compression;
 using StreamRpc.Serialization;
 
 namespace StreamRpc.Protocol;
@@ -12,15 +13,41 @@ internal struct ExecuteRequestMessage
     public ObjectId RemoteId;
     public int MethodSlot;
     public Type[]? GenericMethodArgs;
-    public long ReaderOffset;
 
-    public void Deserialize(ChunkedArrayPoolBufferWriter<byte> message, BinarySerializationContext context)
+    private const int NonCompressedLength = sizeof(MessageType)
+                                          + sizeof(ExecuteRequestOptions)
+                                          + OperationId.Size
+                                          + ObjectId.Size;
+
+    public long Deserialize(ChunkedArrayPoolBufferWriter<byte> message,
+                            BinarySerializationContext context,
+                            Pools pools,
+                            out ChunkedArrayPoolBufferWriter<byte>? uncompressed)
     {
         var reader = message.GetReader();
-        Deserialize(ref reader, context);
+        DeserializeHeader(ref reader, context);
+
+        if (!Options.HasFlag(ExecuteRequestOptions.Compressed))
+        {
+            DeserializeRest(ref reader, context);
+            uncompressed = null;
+            return reader.Consumed;
+        }
+        else
+        {
+            var decompressor = pools.GetDecompressor() ?? throw ThrowHelper.Unreachable;
+            uncompressed = pools.GetWriter();
+            decompressor.Decompress(reader.Sequence.Slice(reader.Consumed), uncompressed);
+            pools.Return(decompressor);
+
+            var uncompressedReader = uncompressed.GetReader();
+            DeserializeRest(ref uncompressedReader, context);
+
+            return uncompressedReader.Consumed;
+        }
     }
 
-    public void Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
+    private void DeserializeHeader(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
         var type = context.Deserialize<MessageType>(ref reader);
         Debug.Assert(type == MessageType.ExecuteRequest);
@@ -28,11 +55,14 @@ internal struct ExecuteRequestMessage
         Options = context.Deserialize<ExecuteRequestOptions>(ref reader);
         OperationId = context.Deserialize<OperationId>(ref reader);
         RemoteId = context.Deserialize<ObjectId>(ref reader);
+    }
+
+    private void DeserializeRest(ref SequenceReader<byte> reader, BinarySerializationContext context)
+    {
         MethodSlot = context.Deserialize<int>(ref reader);
         GenericMethodArgs = Options.HasFlag(ExecuteRequestOptions.GenericMethod)
                             ? context.Deserialize<Type[]>(ref reader)
                             : Type.EmptyTypes;
-        ReaderOffset = reader.Consumed;
     }
 
     public readonly void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
@@ -61,5 +91,17 @@ internal struct ExecuteRequestMessage
         targetSpan = targetSpan[OperationId.Size..];
 
         MemoryMarshal.Write(targetSpan, remoteId);
+    }
+
+    public static void Compress(ChunkedArrayPoolBufferWriter<byte> writer, ICompressor compressor, IBufferWriter<byte> destination)
+    {
+        var ar = writer.FirstChunkRequired.Array;
+
+        var nonCompressed = destination.GetSpan(PackedInt.MaxSize + NonCompressedLength);
+        ar.AsSpan(0, PackedInt.MaxSize + NonCompressedLength).CopyTo(nonCompressed);
+        destination.Advance(PackedInt.MaxSize + NonCompressedLength);
+
+        var source = writer.GetSequence().Slice(PackedInt.MaxSize + NonCompressedLength);
+        compressor.Compress(source, destination);
     }
 }

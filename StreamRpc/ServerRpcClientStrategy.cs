@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using StreamRpc.Compression;
 using StreamRpc.Protocol;
 using StreamRpc.Serialization;
 
@@ -11,6 +12,22 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
                                               RpcSettings settings) : IRpcClientStrategy
 {
     public IServiceProvider Services => serviceScope.ServiceProvider;
+
+    private CompressionProvider? GetCompression(string[] names)
+    {
+        foreach (var name in names)
+        {
+            foreach (var provider in settings.CompressionProviders)
+            {
+                if (provider.AlgorithmName == name)
+                {
+                    return provider;
+                }
+            }
+        }
+
+        return null;
+    }
 
     public void ConfigureServices(Action<IServiceCollection> configure)
     {
@@ -30,28 +47,33 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
         var request = HandshakeRequestMessage.Deserialize(ref reader, pools.SerializationContext);
         message.Reset();
 
-        var response = new HandshakeResponseMessage
-        {
-            IsLittleEndian = BitConverter.IsLittleEndian,
-            ChosenCompression = null,
-            Interfaces = interfaceDescriptors,
-        };
-
+        ErrorCode errorCode;
         if (request.ProtocolVersionMajor != 1)
         {
-            response.ErrorCode = ErrorCode.ProtocolMajorVersionMismatch;
+            errorCode = ErrorCode.ProtocolMajorVersionMismatch;
         }
         else if (request.ProtocolVersionMinor != 0 && (!settings.AllowMinorVersionMismatch || !request.AllowMinorVersionMismatch))
         {
-            response.ErrorCode = ErrorCode.ProtocolMinorVersionMismatch;
+            errorCode = ErrorCode.ProtocolMinorVersionMismatch;
         }
+        else
+        {
+            errorCode = ErrorCode.Ok;
+        }
+
+        var chosenCompression = GetCompression(request.SupportedCompressions);
+        var response = new HandshakeResponseMessage
+        {
+            IsLittleEndian = BitConverter.IsLittleEndian,
+            ChosenCompression = chosenCompression?.AlgorithmName,
+            Interfaces = interfaceDescriptors,
+            ErrorCode = errorCode,
+        };
 
         message.Reserve(PackedInt.MaxSize);
         response.Serialize(message, pools.SerializationContext);
 
-        await StreamHelper.Send(stream,
-                                message,
-                                cancellationToken);
+        await StreamHelper.Send(stream, message, cancellationToken);
         pools.Return(message);
 
         if (!response.IsSuccess)
@@ -59,7 +81,8 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             throw new InvalidOperationException($"Connection with client failed due to error: {response.ErrorCode}");
         }
 
-        return new ConnectionContext(stream, new Pools(pools, response.Interfaces, request.Interfaces), settings, Services);
+        var connPools = new Pools(pools, response.Interfaces, request.Interfaces, chosenCompression);
+        return new ConnectionContext(stream, connPools, settings, Services);
     }
 
     public async ValueTask DisposeAsync()

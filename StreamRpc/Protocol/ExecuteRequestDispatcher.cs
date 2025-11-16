@@ -24,7 +24,16 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
 
         Unsafe.SkipInit(out ExecuteRequestMessage message);
 
-        message.Deserialize(messageBuffer, connection.SerializationContext);
+        long readerOffset = message.Deserialize(messageBuffer,
+                                                connection.SerializationContext,
+                                                connection.Pools,
+                                                out var uncompressed);
+
+        if (uncompressed is { })
+        {
+            connection.Pools.Return(messageBuffer);
+            messageBuffer = uncompressed;
+        }
 
         try
         {
@@ -38,7 +47,7 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
             callee.OperationId = message.OperationId;
             callee.Arguments = messageBuffer;
             callee.Impl = descriptor.Instance;
-            callee.ReaderOffset = message.ReaderOffset;
+            callee.ReaderOffset = readerOffset;
             callee.Cts = connection.Pools.GetCts();
 
             if (!connection.CalleeOperations.Register(callee))
