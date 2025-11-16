@@ -135,6 +135,11 @@ public sealed class RpcSettings : ICloneable
             result.TransparentExceptions.Add(item);
         }
 
+        foreach (var item in CompressionProviders)
+        {
+            result.CompressionProviders.Add(item);
+        }
+
         return result;
     }
 
