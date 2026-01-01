@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -179,8 +180,34 @@ internal static class CalleeImplementer
             }
         */
 
-        var parameters = interfaceMethod.GetParameters();
-        var resultType = ImplementerCommon.GetValueType(interfaceMethod.ReturnType);
+        Type returnType;
+        Type[] parameterTypes;
+        if (genericArgs.Length > 0)
+        {
+            var parameters = interfaceMethod.GetParameters();
+            var subs = new Dictionary<Type, Type>(genericArgs.Length);
+            var genArgs = interfaceMethod.GetGenericArguments();
+
+            Debug.Assert(genArgs.Length == genericArgs.Length);
+            for (int i = 0; i < genericArgs.Length; i++)
+            {
+                subs[genArgs[i]] = genericArgs[i];
+            }
+
+            returnType = ImplementerCommon.Substitute(interfaceMethod.ReturnType, subs);
+            parameterTypes = new Type[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                parameterTypes[i] = ImplementerCommon.Substitute(parameters[i].ParameterType, subs);
+            }
+        }
+        else
+        {
+            returnType = interfaceMethod.ReturnType;
+            parameterTypes = interfaceMethod.GetParameters().Select(x => x.ParameterType).ToArray();
+        }
+
+        var resultType = ImplementerCommon.GetValueType(returnType);
 
         var il = methodBuilder.GetILGenerator();
 
@@ -188,15 +215,15 @@ internal static class CalleeImplementer
         var exLocal = il.DeclareLocal(typeof(Exception));
 
         // evaluation stack must be empty when entering exception block, so free it and restore when we're inside
-        var locals = new List<LocalBuilder>(parameters.Length);
+        var locals = new List<LocalBuilder>(parameterTypes.Length);
 
-        foreach (var param in interfaceMethod.GetParameters())
+        foreach (var param in parameterTypes)
         {
             emitCalleeRef();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, CalleeBase_ParseArgument.MakeGenericMethod(param.ParameterType));
+            il.Emit(genericArgs.Length > 0 ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, CalleeBase_ParseArgument.MakeGenericMethod(param));
 
-            var local = il.DeclareLocal(param.ParameterType);
+            var local = il.DeclareLocal(param);
             il.Emit(OpCodes.Stloc, local);
             locals.Add(local);
         }
@@ -224,23 +251,23 @@ internal static class CalleeImplementer
                 il.Emit(OpCodes.Callvirt, interfaceMethod);
             }
 
-            if (interfaceMethod.ReturnType == typeof(void))
+            if (returnType == typeof(void))
             {
                 il.Emit(OpCodes.Call, CalleeBase_CompleteVoid);
             }
-            else if (interfaceMethod.ReturnType == typeof(ValueTask))
+            else if (returnType == typeof(ValueTask))
             {
                 il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
             }
-            else if (interfaceMethod.ReturnType == typeof(Task))
+            else if (returnType == typeof(Task))
             {
                 // WaitVoidTask(new ValueTask(res));
                 il.Emit(OpCodes.Newobj, ValueTask_Ctor_Task);
                 il.Emit(OpCodes.Call, CalleeBase_WaitVoidTask);
             }
-            else if (interfaceMethod.ReturnType.IsGenericType)
+            else if (returnType.IsGenericType)
             {
-                var typeDef = interfaceMethod.ReturnType.GetGenericTypeDefinition();
+                var typeDef = returnType.GetGenericTypeDefinition();
                 if (typeDef == typeof(ValueTask<>))
                 {
                     il.Emit(OpCodes.Call, CalleeBase_WaitTaskT.MakeGenericMethod(resultType));
@@ -426,7 +453,7 @@ internal static class CalleeImplementer
             }
         */
 
-        var invokeMethod = trampolineType.DefineMethod(nameof(GenericMethodInvokeTrampoline.Invoke),
+        var invokeMethod = trampolineType.DefineMethod(nameof(GenericMethodInvokeTrampoline.InvokeCore),
                                                        MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final,
                                                        CallingConventions.HasThis,
                                                        typeof(void),

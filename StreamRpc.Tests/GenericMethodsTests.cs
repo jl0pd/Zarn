@@ -7,14 +7,23 @@ public sealed class GenericMethodsTests : RpcTestsBase
     [Fact]
     public Task TestParameterlessMethod() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
     {
+        // also checks that reuse of GenericMethodInvokeTrampoline works correctly
         Assert.Equal("Int32", inst.FreeGeneric<int>());
         Assert.Equal("Int32", inst.FreeGeneric<int>());
         Assert.Equal("String", inst.FreeGeneric<string>());
         Assert.Equal("String", inst.FreeGeneric<string>());
         Assert.Equal("Single[]", inst.FreeGeneric<float[]>());
+        Assert.Equal("Single[]", inst.FreeGeneric<float[]>());
     });
 
-    /*
+    [Fact]
+    public Task TestDefault() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    {
+        Assert.Equal(0, inst.Default<int>());
+        Assert.Equal(0f, inst.Default<float>());
+        Assert.Null(inst.Default<string?>());
+    });
+
     [Fact]
     public Task TestId() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
     {
@@ -23,12 +32,11 @@ public sealed class GenericMethodsTests : RpcTestsBase
         Assert.Equal([], inst.Id(Array.Empty<float>()));
     });
 
-    [Fact]
-    public Task TestIdAsync() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
-    {
-        Assert.Equal(1, await inst.IdAsync(1));
-        Assert.Equal("", await inst.IdAsync(""));
-        Assert.Equal([], await inst.IdAsync(Array.Empty<float>()));
-    });
-    */
+    //[Fact]
+    //public Task TestIdAsync() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    //{
+    //    Assert.Equal(1, await inst.IdAsync(1));
+    //    Assert.Equal("", await inst.IdAsync(""));
+    //    Assert.Equal(Array.Empty<float>(), await inst.IdAsync(Array.Empty<float>()));
+    //});
 }

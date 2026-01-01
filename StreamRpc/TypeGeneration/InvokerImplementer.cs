@@ -149,13 +149,13 @@ internal static class InvokerImplementer
         {
             var interfaceGenArgs = interfaceMethod.GetGenericArguments();
             genArgs = method.DefineGenericParameters(interfaceGenArgs.Select(x => x.Name).ToArray());
-            var substitutionsDict = new Dictionary<Type, Type>();
+            var subs = new Dictionary<Type, Type>(genArgs.Length);
             for (int i = 0; i < interfaceGenArgs.Length; i++)
             {
-                substitutionsDict[interfaceGenArgs[i]] = genArgs[i];
+                subs[interfaceGenArgs[i]] = genArgs[i];
             }
 
-            substitutions = substitutionsDict;
+            substitutions = subs;
         }
 
         method.SetReturnType(ImplementerCommon.Substitute(interfaceMethod.ReturnType, substitutions));
