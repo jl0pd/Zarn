@@ -1,10 +1,20 @@
 using System.Buffers;
+using StreamRpc.Serialization.Serializers.Core;
 
 namespace StreamRpc.Serialization;
 
 public abstract class BinarySerializer
 {
     internal abstract byte[] TypePrefix { get; }
+
+    internal static byte[] GetTypePrefix(Type type)
+    {
+        var writer = new ArrayBufferWriter<byte>(256);
+        writer.GetSpan()[0] = (byte)ObjectType.Custom;
+        writer.Advance(1);
+        TypeBinarySerializer.Instance.Serialize(type, writer, null!);
+        return writer.WrittenSpan.ToArray();
+    }
 
     public abstract bool CanConvert(Type type);
 

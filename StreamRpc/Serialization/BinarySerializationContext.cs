@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using StreamRpc.Protocol;
 using StreamRpc.Serialization.Serializers;
 using StreamRpc.Serialization.Serializers.Core;
+using StreamRpc.Serialization.Serializers.Core.Collections;
 using StreamRpc.Serialization.Serializers.Exceptions;
 
 namespace StreamRpc.Serialization;
@@ -32,6 +33,11 @@ public sealed class BinarySerializationContext
         UnmanagedBinarySerializerFactory.Instance,
         ArrayBinarySerializerFactory.Instance,
         BinarySerializableFactory.Instance,
+        SmallArray0BinarySerializerFactory.Instance,
+        SmallArray1BinarySerializerFactory.Instance,
+        SmallArray2BinarySerializerFactory.Instance,
+        SmallArray3BinarySerializerFactory.Instance,
+        SmallArray4BinarySerializerFactory.Instance,
     ];
 
     internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()
