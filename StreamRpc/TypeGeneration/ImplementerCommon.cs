@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Reflection;
 using System.Reflection.Emit;
+using StreamRpc.Collections;
 
 namespace StreamRpc.TypeGeneration;
 
@@ -9,6 +10,9 @@ internal static class ImplementerCommon
     public static readonly MethodInfo Type_GetTypeFromHandle
             = typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!;
 
+    public static readonly MethodInfo Type_MakeGenericType
+            = typeof(Type).GetMethod(nameof(Type.MakeGenericType))!;
+
     public static readonly MethodInfo MethodBase_GetMethodFromHandle
             = typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle)])!;
 
@@ -16,6 +20,37 @@ internal static class ImplementerCommon
             = typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle), typeof(RuntimeTypeHandle)])!;
 
     public static readonly MethodInfo ThrowHelper_Fail = typeof(ThrowHelper).GetMethod(nameof(ThrowHelper.Fail))!;
+
+    public const int SmallArrayMaxSize = 4;
+
+    public static readonly Dictionary<int, Type> SmallArraysTypes = new()
+    {
+        { 0, typeof(SmallArray0<Type>) },
+        { 1, typeof(SmallArray1<Type>) },
+        { 2, typeof(SmallArray2<Type>) },
+        { 3, typeof(SmallArray3<Type>) },
+        { 4, typeof(SmallArray4<Type>) },
+    };
+
+    public static MethodInfo GetDeclaredMethod(this Type type, string name)
+    {
+        return type.GetTypeInfo().GetDeclaredMethod(name) ?? throw ThrowHelper.Unreachable;
+    }
+
+    public static IEnumerable<MethodInfo> GetDeclaredMethods(this Type type, string name)
+    {
+        return type.GetTypeInfo().GetDeclaredMethods(name);
+    }
+
+    public static PropertyInfo GetDeclaredProperty(this Type type, string name)
+    {
+        return type.GetTypeInfo().GetDeclaredProperty(name) ?? throw ThrowHelper.Unreachable;
+    }
+
+    public static ConstructorInfo GetDeclaredConstructor(this Type type)
+    {
+        return type.GetTypeInfo().DeclaredConstructors.Single() ?? throw ThrowHelper.Unreachable;
+    }
 
     public static void CreateIgnoreAccessChecks(ModuleBuilder module)
     {

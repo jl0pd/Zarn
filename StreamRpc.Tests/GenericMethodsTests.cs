@@ -5,9 +5,11 @@ namespace StreamRpc.Tests;
 public sealed class GenericMethodsTests : RpcTestsBase
 {
     [Fact]
-    public Task TestId() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    public Task TestParameterlessMethod() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
     {
         Assert.Equal("Int32", inst.FreeGeneric<int>());
+        Assert.Equal("Int32", inst.FreeGeneric<int>());
+        Assert.Equal("String", inst.FreeGeneric<string>());
         Assert.Equal("String", inst.FreeGeneric<string>());
         Assert.Equal("Single[]", inst.FreeGeneric<float[]>());
     });

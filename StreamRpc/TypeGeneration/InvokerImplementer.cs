@@ -44,28 +44,27 @@ internal static class InvokerImplementer
 
         ImplementerCommon.CreateIgnoreAccessChecks(s_module);
 
-        var invokerBase = typeof(InvokerBase).GetTypeInfo();
-        InvokerBase_ctor = invokerBase.DeclaredConstructors.Single();
-        InvokerBase_CreateOperationT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.CreateOperation))!;
-        InvokerBase_CreateVoidOperation = invokerBase.GetDeclaredMethod(nameof(InvokerBase.CreateVoidOperation))!;
-        InvokerBase_SynchronousWaitResultT = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitResult))!;
-        InvokerBase_SynchronousWaitVoidResult = invokerBase.GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidResult))!;
-        InvokerBase_GetMethodSlot = invokerBase.GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
+        InvokerBase_ctor = typeof(InvokerBase).GetDeclaredConstructor();
+        InvokerBase_CreateOperationT = typeof(InvokerBase).GetDeclaredMethod(nameof(InvokerBase.CreateOperation))!;
+        InvokerBase_CreateVoidOperation = typeof(InvokerBase).GetDeclaredMethod(nameof(InvokerBase.CreateVoidOperation))!;
+        InvokerBase_SynchronousWaitResultT = typeof(InvokerBase).GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitResult))!;
+        InvokerBase_SynchronousWaitVoidResult = typeof(InvokerBase).GetDeclaredMethod(nameof(InvokerBase.SynchronousWaitVoidResult))!;
+        InvokerBase_GetMethodSlot = typeof(InvokerBase).GetDeclaredMethod(nameof(InvokerBase.GetMethodSlot))!;
 
-        InvokerOperation_SerializeArgT = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.SerializeArg))!;
-        InvokerOperation_SetMethodSlot = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.MethodSlot))!.GetSetMethod()!;
-        InvokerOperation_Prepare = typeof(InvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation.Prepare))!;
-        InvokerOperation_SetCancellationToken = typeof(InvokerOperation).GetTypeInfo().GetDeclaredProperty(nameof(InvokerOperation.CancellationToken))!.GetSetMethod()!;
-        InvokerOperationT_Start = typeof(InvokerOperation<>).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation<int>.Start))!;
-        VoidInvokerOperation_Start = typeof(VoidInvokerOperation).GetTypeInfo().GetDeclaredMethod(nameof(VoidInvokerOperation.Start))!;
+        InvokerOperation_SerializeArgT = typeof(InvokerOperation).GetDeclaredMethod(nameof(InvokerOperation.SerializeArg))!;
+        InvokerOperation_SetMethodSlot = typeof(InvokerOperation).GetDeclaredProperty(nameof(InvokerOperation.MethodSlot))!.GetSetMethod()!;
+        InvokerOperation_Prepare = typeof(InvokerOperation).GetDeclaredMethod(nameof(InvokerOperation.Prepare))!;
+        InvokerOperation_SetCancellationToken = typeof(InvokerOperation).GetDeclaredProperty(nameof(InvokerOperation.CancellationToken))!.GetSetMethod()!;
+        InvokerOperationT_Start = typeof(InvokerOperation<>).GetDeclaredMethod(nameof(InvokerOperation<int>.Start))!;
+        VoidInvokerOperation_Start = typeof(VoidInvokerOperation).GetDeclaredMethod(nameof(VoidInvokerOperation.Start))!;
 
         CancellationToken_ThrowIfCancellationRequested = typeof(CancellationToken).GetMethod(nameof(CancellationToken.ThrowIfCancellationRequested))!;
         ValueTask_AsTask = typeof(ValueTask).GetMethod(nameof(ValueTask.AsTask))!;
 
-        SmallArray_Create1_Type = typeof(SmallArray).GetTypeInfo().GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 1).MakeGenericMethod(typeof(Type));
-        SmallArray_Create2_Type = typeof(SmallArray).GetTypeInfo().GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 2).MakeGenericMethod(typeof(Type));
-        SmallArray_Create3_Type = typeof(SmallArray).GetTypeInfo().GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 3).MakeGenericMethod(typeof(Type));
-        SmallArray_Create4_Type = typeof(SmallArray).GetTypeInfo().GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 4).MakeGenericMethod(typeof(Type));
+        SmallArray_Create1_Type = typeof(SmallArray).GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 1).MakeGenericMethod(typeof(Type));
+        SmallArray_Create2_Type = typeof(SmallArray).GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 2).MakeGenericMethod(typeof(Type));
+        SmallArray_Create3_Type = typeof(SmallArray).GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 3).MakeGenericMethod(typeof(Type));
+        SmallArray_Create4_Type = typeof(SmallArray).GetDeclaredMethods(nameof(SmallArray.Create)).First(x => x.GetParameters().Length == 4).MakeGenericMethod(typeof(Type));
     }
 
     public static Type GetImplementation(Type interfaceType)
@@ -246,7 +245,7 @@ internal static class InvokerImplementer
 
             il.Emit(OpCodes.Ldloc, opLocal);
 
-            if (genArgs.Length <= 4)
+            if (genArgs.Length <= ImplementerCommon.SmallArrayMaxSize)
             {
                 foreach (var arg in genArgs)
                 {
@@ -314,7 +313,7 @@ internal static class InvokerImplementer
         }
         else
         {
-            il.Emit(OpCodes.Call, typeof(InvokerOperation<>).MakeGenericType(returnValueType).GetTypeInfo().GetDeclaredMethod(nameof(InvokerOperation<int>.Start))!);
+            il.Emit(OpCodes.Call, typeof(InvokerOperation<>).MakeGenericType(returnValueType).GetDeclaredMethod(nameof(InvokerOperation<int>.Start))!);
         }
 
         if (interfaceMethod.ReturnType == typeof(void))

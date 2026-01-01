@@ -113,14 +113,15 @@ internal abstract class CalleeBase
     internal protected GenericMethodInvokeTrampoline? TryFindTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
                                                                         ReadOnlySpan<Type> genericArgs)
     {
-        while (head is { })
+        var current = head;
+        while (current is { })
         {
-            if (head.Value.Matches(genericArgs))
+            if (current.Value.Matches(genericArgs))
             {
-                return head.Value;
+                return current.Value;
             }
 
-            head = Volatile.Read(ref head.Next);
+            current = Volatile.Read(ref current.Next);
         }
 
         return null;
@@ -130,12 +131,19 @@ internal abstract class CalleeBase
                                                                       Type trampolineType)
     {
         var trampoline = (GenericMethodInvokeTrampoline)Activator.CreateInstance(trampolineType)!;
-
         var node = new SingleLinkedListNode<GenericMethodInvokeTrampoline>(trampoline);
-        ref var current = ref head;
+
+        var actual = Interlocked.CompareExchange(ref head, node, null);
+        if (actual is null)
+        {
+            // head was set
+            return trampoline;
+        }
+
+        var current = head;
         while (true)
         {
-            var actual = Interlocked.CompareExchange(ref current, node, null);
+            actual = Interlocked.CompareExchange(ref current.Next, node, null);
             if (actual == null)
             {
                 // value was set
