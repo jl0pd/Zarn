@@ -19,7 +19,8 @@ internal sealed class InvokerFactory
 
     public InvokerFactory(InterfaceDescriptor descriptor)
     {
-        InterfaceType = descriptor.ResolveType() ?? throw new InvalidOperationException("Unable to load interface: " + descriptor.AssemblyQualifiedName);
+        InterfaceType = descriptor.ResolveType() 
+            ?? throw new InvalidOperationException("Unable to load interface: " + descriptor.Name.ToString());
         MethodsTable = descriptor.ResolveMethods();
     }
 

@@ -111,6 +111,36 @@ internal static class ImplementerCommon
         il.Emit(OpCodes.Ret);
     }
 
+    private static readonly Type[]?[] s_typesPool = new Type[4][];
+
+    private static Type[] GetPooledArray(int size)
+    {
+        if (size == 0)
+        {
+            return Type.EmptyTypes;
+        }
+
+        if (size <= s_typesPool.Length)
+        {
+            return Interlocked.Exchange(ref s_typesPool[size - 1], null) ?? new Type[size];
+        }
+        return new Type[size];
+    }
+
+    private static void ReturnPooledArray(Type[] array)
+    {
+        if (array.Length == 0)
+        {
+            return;
+        }
+
+        if (array.Length <= s_typesPool.Length)
+        {
+            Array.Clear(array);
+            Interlocked.Exchange(ref s_typesPool[array.Length - 1], array);
+        }
+    }
+
     public static Type Substitute(Type type, IReadOnlyDictionary<Type, Type> substitutions)
     {
         if (substitutions.Count == 0)
@@ -168,7 +198,7 @@ internal static class ImplementerCommon
         if (type.IsGenericType)
         {
             var genArgs = type.GetGenericArguments();
-            var result = ArrayPool<Type>.Shared.Rent(genArgs.Length);
+            var result = GetPooledArray(genArgs.Length);
             try
             {
                 for (int i = 0; i < genArgs.Length; i++)
@@ -176,7 +206,7 @@ internal static class ImplementerCommon
                     result[i] = Substitute(genArgs[i], substitutions);
                 }
 
-                if (genArgs.AsSpan().SequenceEqual(result.AsSpan(0, genArgs.Length)))
+                if (genArgs.AsSpan().SequenceEqual(result))
                 {
                     return type;
                 }
@@ -185,8 +215,7 @@ internal static class ImplementerCommon
             }
             finally
             {
-                Array.Clear(result, 0, genArgs.Length);
-                ArrayPool<Type>.Shared.Return(result);
+                ReturnPooledArray(result);
             }
         }
 

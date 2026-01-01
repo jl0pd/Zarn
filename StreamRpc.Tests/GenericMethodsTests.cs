@@ -1,4 +1,5 @@
 using StreamRpc.Tests.TestTypes;
+using StreamRpc.Tests.Utils;
 
 namespace StreamRpc.Tests;
 
@@ -32,11 +33,29 @@ public sealed class GenericMethodsTests : RpcTestsBase
         Assert.Equal([], inst.Id(Array.Empty<float>()));
     });
 
-    //[Fact]
-    //public Task TestIdAsync() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
-    //{
-    //    Assert.Equal(1, await inst.IdAsync(1));
-    //    Assert.Equal("", await inst.IdAsync(""));
-    //    Assert.Equal(Array.Empty<float>(), await inst.IdAsync(Array.Empty<float>()));
-    //});
+    [Fact]
+    public Task TestIdAsync() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    {
+        Assert.Equal(1, await inst.IdAsync(1));
+        Assert.Equal("", await inst.IdAsync(""));
+        Assert.Equal((float[])[], await inst.IdAsync(Array.Empty<float>()));
+    });
+
+    [Fact]
+    public Task TestReplicateToList() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    {
+        Assert.Equal(["asd", "asd", "asd"], await inst.ReplicateToListAsync("asd", 3));
+    });
+
+    [Fact]
+    public Task TestReplicateToArray() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    {
+        Assert.Equal((string[])["asd", "asd", "asd"], await inst.ReplicateToArrayAsync("asd", 3));
+    });
+
+    [Fact]
+    public Task TestToArray() => RunConnectToServerTest<IGenericMethods, GenericMethods>(async inst =>
+    {
+        Assert.Equal((int[])[0, 1, 2, 3, 4], await inst.ToArrayAsync(Enumerable.Range(0, 5).AsAsyncEnumerable()));
+    });
 }
