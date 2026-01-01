@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using StreamRpc.Collections;
 using StreamRpc.Serialization;
 using StreamRpc.TypeGeneration;
 
@@ -18,8 +19,6 @@ internal abstract class CalleeBase
     public ConnectionContext? Connection { get; set; }
 
     internal ICalleeFactory Factory { get; set; } = null!;
-
-    internal Type[]? GenericMethodArgs { get; set; }
 
     public void Dispatch(ref SequenceReader<byte> reader, int methodSlot)
     {
@@ -108,6 +107,48 @@ internal abstract class CalleeBase
         Connection.Pools.Return(Interlocked.Exchange(ref Cts, null));
         Connection = null;
         Factory.Return(this);
+    }
+
+
+    internal protected GenericMethodInvokeTrampoline? TryFindTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                        ReadOnlySpan<Type> genericArgs)
+    {
+        while (head is { })
+        {
+            if (head.Value.Matches(genericArgs))
+            {
+                return head.Value;
+            }
+
+            head = Volatile.Read(ref head.Next);
+        }
+
+        return null;
+    }
+
+    internal protected GenericMethodInvokeTrampoline CreateTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                      Type trampolineType)
+    {
+        var trampoline = (GenericMethodInvokeTrampoline)Activator.CreateInstance(trampolineType)!;
+
+        var node = new SingleLinkedListNode<GenericMethodInvokeTrampoline>(trampoline);
+        ref var current = ref head;
+        while (true)
+        {
+            var actual = Interlocked.CompareExchange(ref current, node, null);
+            if (actual == null)
+            {
+                // value was set
+                return trampoline;
+            }
+            else if (actual.Value.GetType() == trampolineType)
+            {
+                // other trampoline with same type was set
+                return actual.Value;
+            }
+
+            current = Volatile.Read(ref current.Next);
+        }
     }
 
     internal protected void Fail(Exception e)

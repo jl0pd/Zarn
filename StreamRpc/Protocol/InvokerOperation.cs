@@ -34,12 +34,6 @@ internal abstract class InvokerOperation
         set => _message.MethodSlot = value;
     }
 
-    public Type[]? GenericMethodArgs
-    {
-        get => _message.GenericMethodArgs;
-        set => _message.GenericMethodArgs = value;
-    }
-
     private int _isResultSet = 0;
 
     private Task? _waitForFreeOperationSlot;
@@ -70,7 +64,6 @@ internal abstract class InvokerOperation
         }
         _message.Serialize(writer, SerializationContext);
         RequestOptions = ExecuteRequestOptions.None;
-        GenericMethodArgs = null;
         RequestWriter = writer;
     }
 

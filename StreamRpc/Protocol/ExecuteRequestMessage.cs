@@ -12,7 +12,6 @@ internal struct ExecuteRequestMessage
     public OperationId OperationId;
     public ObjectId RemoteId;
     public int MethodSlot;
-    public Type[]? GenericMethodArgs;
 
     private const int NonCompressedLength = sizeof(MessageType)
                                           + sizeof(ExecuteRequestOptions)
@@ -60,9 +59,6 @@ internal struct ExecuteRequestMessage
     private void DeserializeRest(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
         MethodSlot = context.Deserialize<int>(ref reader);
-        GenericMethodArgs = Options.HasFlag(ExecuteRequestOptions.GenericMethod)
-                            ? context.Deserialize<Type[]>(ref reader)
-                            : Type.EmptyTypes;
     }
 
     public readonly void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
@@ -72,11 +68,6 @@ internal struct ExecuteRequestMessage
         context.Serialize(OperationId, writer);
         context.Serialize(RemoteId, writer);
         context.Serialize(MethodSlot, writer);
-        if (Options.HasFlag(ExecuteRequestOptions.GenericMethod))
-        {
-            Debug.Assert(GenericMethodArgs is { Length: > 0 });
-            context.Serialize(GenericMethodArgs, writer);
-        }
     }
 
     public static void ReplacePlaceholders(ChunkedArrayPoolBufferWriter<byte> writer,

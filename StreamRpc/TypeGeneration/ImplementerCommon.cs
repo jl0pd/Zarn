@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Buffers;
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace StreamRpc.TypeGeneration;
@@ -73,5 +74,87 @@ internal static class ImplementerCommon
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, baseCtor);
         il.Emit(OpCodes.Ret);
+    }
+
+    public static Type Substitute(Type type, IReadOnlyDictionary<Type, Type> substitutions)
+    {
+        if (substitutions.Count == 0)
+        {
+            return type;
+        }
+
+        if (substitutions.TryGetValue(type, out var substitution))
+        {
+            return substitution;
+        }
+
+        if (type.IsGenericParameter)
+        {
+            // it would've substituted earlier
+            return type;
+        }
+
+        // array, pointer or reference
+        if (type.GetElementType() is { } elemType)
+        {
+            var sub = Substitute(elemType, substitutions);
+            if (sub == elemType)
+            {
+                return sub;
+            }
+
+            if (type.IsArray)
+            {
+                if (type.IsSZArray)
+                {
+                    return sub.MakeArrayType();
+                }
+                else if (!type.IsVariableBoundArray)
+                {
+                    return sub.MakeArrayType(type.GetArrayRank());
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
+            }
+            if (type.IsPointer)
+            {
+                return sub.MakePointerType();
+            }
+            if (type.IsByRef)
+            {
+                return sub.MakeByRefType();
+            }
+
+            return sub;
+        }
+
+        if (type.IsGenericType)
+        {
+            var genArgs = type.GetGenericArguments();
+            var result = ArrayPool<Type>.Shared.Rent(genArgs.Length);
+            try
+            {
+                for (int i = 0; i < genArgs.Length; i++)
+                {
+                    result[i] = Substitute(genArgs[i], substitutions);
+                }
+
+                if (genArgs.AsSpan().SequenceEqual(result.AsSpan(0, genArgs.Length)))
+                {
+                    return type;
+                }
+
+                return type.GetGenericTypeDefinition().MakeGenericType(result);
+            }
+            finally
+            {
+                Array.Clear(result, 0, genArgs.Length);
+                ArrayPool<Type>.Shared.Return(result);
+            }
+        }
+
+        return type;
     }
 }
