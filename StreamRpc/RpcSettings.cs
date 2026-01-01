@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using StreamRpc.Collections;
 using StreamRpc.Compression;
 using StreamRpc.Serialization;
 using StreamRpc.Utils;
