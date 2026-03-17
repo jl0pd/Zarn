@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using StreamRpc;
-using StreamRpc.AspNetCore;
+using Zarn;
+using Zarn.AspNetCore;
 
 namespace Benchmarks.Services;
 
 [ApiController]
-public sealed class StreamRpcController(ILogger<StreamRpcController> logger) : ControllerBase
+public sealed class ZarnController(ILogger<ZarnController> logger) : ControllerBase
 {
-    [HttpPost("streamRpc/calculator")]
+    [HttpPost("Zarn/calculator")]
     public async Task RunCalculatorAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Request accepted");
@@ -33,7 +33,7 @@ public sealed class StreamRpcController(ILogger<StreamRpcController> logger) : C
         logger.LogInformation("Communication took {Delay}", sw.Elapsed);
     }
 
-    [HttpPost("streamRpc/calculator2")]
+    [HttpPost("Zarn/calculator2")]
     public Task RunCalculatorAsync() => HttpContext.RunRpc(s =>
     {
         s.AllowRemoteConnection<ICalculator>();
