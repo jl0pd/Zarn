@@ -1,0 +1,18 @@
+using System.Buffers;
+
+namespace Zarn.Serialization.Serializers.Exceptions;
+
+internal sealed class TaskCanceledExceptionBinarySerializer : ExceptionSerializerBase<TaskCanceledException>
+{
+    public static TaskCanceledExceptionBinarySerializer Instance { get; } = new();
+
+    protected override TaskCanceledException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
+    {
+        return new TaskCanceledException(message, innerException);
+    }
+
+    protected override void SerializeProps(TaskCanceledException value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    {
+        // cannot serialize TaskCanceledException.Task
+    }
+}

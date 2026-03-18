@@ -17,9 +17,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Benchmarks.Base\Benchmarks.Base.csproj" />
-    <ProjectReference Include="..\StreamRpc.AspNetCore\StreamRpc.AspNetCore.csproj" />
-    <ProjectReference Include="..\StreamRpc.Tests\StreamRpc.Tests.csproj" />
-    <ProjectReference Include="..\StreamRpc\StreamRpc.csproj" />
+    <ProjectReference Include="..\Zarn.AspNetCore\Zarn.AspNetCore.csproj" />
+    <ProjectReference Include="..\Zarn.Tests\Zarn.Tests.csproj" />
+    <ProjectReference Include="..\Zarn\Zarn.csproj" />
   </ItemGroup>
 
 </Project>
