@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Zarn.Tests" />
+    <InternalsVisibleTo Include="Benchmarks.Client" />
   </ItemGroup>
 
   <ItemGroup>

@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zarn", "Zarn\Zarn.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zarn.Tests", "Zarn.Tests\Zarn.Tests.csproj", "{D3385E3C-0D7F-42B1-B728-D1C0DA57A532}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zarn.Console", "Zarn.Console\Zarn.Console.csproj", "{3A3F1CD1-F73A-47EE-BFCB-A111E3038759}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Benchmarks.Client", "Benchmarks.Client\Benchmarks.Client.csproj", "{3A3F1CD1-F73A-47EE-BFCB-A111E3038759}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Benchmarks.Server", "Benchmarks.Server\Benchmarks.Server.csproj", "{3E2E7925-57E1-4B66-B670-119353F89E89}"
 EndProject

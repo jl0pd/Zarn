@@ -2,7 +2,7 @@
   "profiles": {
     "Zarn.Console": {
       "commandName": "Project",
-      "commandLineArgs": "https-batch"
+      "commandLineArgs": "benchmark"
     }
   }
 }
