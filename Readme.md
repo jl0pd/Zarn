@@ -5,8 +5,7 @@ It's a library for seamless communication with remote process over arbitrary `Sy
 
 ## Features
 
-### Amortized zero allocations
-
+* **Amortized zero allocations**:
 Usage of `ValueTask<>` allows to reuse state between requests, avoiding allocations
 that would've been required for `Task<>`. `struct` parameters doesn't need allocations,
 so call to following `IAdder` won't need to allocate nothing both on client and on server.
@@ -18,22 +17,25 @@ public interface IAdder
 }
 ```
 
-### Blazing fast
+* **Threadsafe**: All objects can be used by multiple threads simultaneously
+without risk of deadlocking or corruption.
 
-Faster than gRpc
+* **Blazing fast**: Has higher throughput, lower latency and no gen0 allocation compared to gRpc
 
-~TODO: benchmarks~
+| Method | Mean      | Error    | StdDev   | Gen0   | Allocated |
+|------- |----------:|---------:|---------:|-------:|----------:|
+| Grpc   | 123.82 μs | 0.846 μs | 0.791 μs | 0.2441 |    6614 B |
+| Zarn   |  87.00 μs | 0.517 μs | 0.484 μs |      - |     953 B |
 
-### IAsyncEnumerable support
+See [Benchmarks folder](./Benchmarks.Client/) for more info
 
-Both sync and async enumerables can be returned from methods and passed as parameters
-supporting lazy enumeration
+* **`IAsyncEnumerable` support**: Both sync and async enumerables can be returned
+from methods and passed as parameters supporting lazy enumeration in both directions.
 
-### Referential transparency of passed interfaces
-
-Depending on parameter type value is either passed by-value or by-proxy across RPC.
-`struct` and `class` parameters are serialized as is and deserialized back, making full copy.
-On the other hand for `interface` proxy is generated which is tracked by RPC infrastructure.
+* **Referential transparency of passed interfaces**: Depending on parameter type
+value is either passed by-value or by-proxy across RPC. `struct` and `class`
+parameters are serialized as is and deserialized back, making full copy. On the
+other hand for `interface` proxy is generated which is tracked by RPC infrastructure.
 This can be used to pass statefull object across RPC.
 
 ```csharp
@@ -57,42 +59,31 @@ await store.SaveWorker(worker);
 Assert.Same(worker, await store.GetWorker());
 ```
 
-### No schema
+* **No schema**: Just write interface, register and it will work. No need to
+mess with additional files and generators, your code already denotes schema.
 
-Just write interface, register and it will work. No need to mess with additional
-files and generators, your code already denotes schema.
+* **Transparent exceptions**: Exception's type and stacktrace is kept when
+exception is thrown in other process. This semantics may be configured using
+`RpcSettings.UnhandledExceptionPropagationBehavior` and `RpcSettings.TransparentExceptions`
 
-### Transparent exceptions
+* **`CancellationToken` support**: `CancellationToken`s can be used and when
+cancelled they propagate cancellation across RPC.
 
-Exception's type and stacktrace is kept when exception is thrown in other process.
-This semantics may be configured using `RpcSettings.UnhandledExceptionPropagationBehavior`
-and `RpcSettings.TransparentExceptions`
-
-### Cancellation token support
-
-`CancellationToken`s can be used and when cancelled they propagate cancellation across RPC.
-
-### Compression support
-
-Opt-in compression support for smaller network traffic.
+* **Compression support**: Opt-in compression support for smaller network traffic.
 Create `RpcServer` and `RpcClient` passing `RpcSettings` with property `CompressionProviders` initialized.
-If both parties support same compression, then it will be used.
-Providers closer to start of list has higher priority.
-Has built-in `BrotliCompressionProvider`.
+If both parties support same compression, then it will be used. Providers closer
+to start of list has higher priority. Has built-in `BrotliCompressionProvider`.
 
-### Dependency injection
+* **Dependency injection**: Both client and server use familiar infrastructure
+from `Microsoft.Extensions.DependencyInjection`.
 
-Both client and server use familiar infrastructure from `Microsoft.Extensions.DependencyInjection`.
+* **Configurable serialization**: By-default types are serialized using `System.Text.Json`,
+so you don't need to worry about complexity of writing own serializer.
+Alternative serializer based on `BinarySerializer` can be provided for better
+performance. See doc on `RpcSettings.Serializers` for more details.
 
-### Configurable serialization
-
-By-default types are serialized using `System.Text.Json`, so you don't need to worry
-about complexity of writing own serializer. Alternative serializer based on `BinarySerializer`
-can be provided for better performance. See doc on `RpcSettings.Serializers` for more details
-
-### Asp.net support
-
-Package `Zarn.AspNetCore` provides support for running RPC server inside Aspnet over http2 connection.
+* **Asp.net support**: Package `Zarn.AspNetCore` provides support for running RPC
+server inside Aspnet over http2 connection.
 
 ```csharp
 // inside startup code configure RpcSettings
