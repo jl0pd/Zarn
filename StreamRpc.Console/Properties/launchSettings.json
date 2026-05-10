@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "StreamRpc.Console": {
-      "commandName": "Project",
-      "commandLineArgs": "https-batch"
-    }
-  }
-}

@@ -1,0 +1,55 @@
+using System.Buffers;
+using System.IO.Compression;
+using System.Text;
+using Zarn.Compression;
+using Zarn.Tests.Utils;
+
+namespace Zarn.Tests;
+
+public sealed class CompressionTests
+{
+    private static readonly CompressionLevel[] s_levels =
+    [
+        CompressionLevel.Optimal,
+        CompressionLevel.Fastest,
+        CompressionLevel.NoCompression,
+        CompressionLevel.SmallestSize,
+    ];
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("some text")]
+    [InlineData("another text")]
+    public void Roundtrip(string text)
+    {
+        foreach (var level in s_levels)
+        {
+            var provider = (CompressionProvider)new BrotliCompressionProvider(level);
+
+            var utf8Bytes = Encoding.UTF8.GetBytes(text);
+            var decompressor = provider.CreateDecompressor();
+            var compressor = provider.CreateCompressor();
+
+            for (int i = 1; i < utf8Bytes.Length; i++)
+            {
+                AssertRoundtrip(SequenceHelper.Split(utf8Bytes, i), compressor, decompressor);
+            }
+        }
+    }
+
+    private static void AssertRoundtrip(ReadOnlySequence<byte> bytes, ICompressor compressor, IDecompressor decompressor)
+    {
+        var writer = new ArrayBufferWriter<byte>((int)bytes.Length);
+        compressor.Compress(bytes, writer);
+
+        for (int i = 1; i < writer.WrittenCount; i++)
+        {
+            var decompressionSource = SequenceHelper.Split(writer.WrittenMemory, i);
+            var decompressed = new ArrayBufferWriter<byte>((int)bytes.Length);
+
+            decompressor.Decompress(decompressionSource, decompressed);
+
+            Assert.Equal(bytes.ToArray(), decompressed.WrittenSpan.ToArray());
+        }
+    }
+}
