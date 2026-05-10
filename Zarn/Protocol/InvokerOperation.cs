@@ -34,12 +34,6 @@ internal abstract class InvokerOperation
         set => _message.MethodSlot = value;
     }
 
-    public Type[]? GenericMethodArgs
-    {
-        get => _message.GenericMethodArgs;
-        set => _message.GenericMethodArgs = value;
-    }
-
     private int _isResultSet = 0;
 
     private Task? _waitForFreeOperationSlot;
@@ -53,6 +47,7 @@ internal abstract class InvokerOperation
         _cancellationTokenRegistration.Dispose();
         _cancellationTokenRegistration = default;
         _isResultSet = 0;
+        RequestOptions = ExecuteRequestOptions.None;
         var pools = Invoker?.Connection.Pools;
         Invoker = null;
         return pools;
@@ -63,14 +58,11 @@ internal abstract class InvokerOperation
         Debug.Assert(Connection is { });
         SerializationContext = Connection.SerializationContext;
         var writer = Connection.Pools.GetWriter();
-        writer.Reserve(PackedInt.MaxSize);
+        writer.Reserve(PackedInt.MaxSize + ExecuteRequestMessage.MaxHeaderSize);
         if (Connection.Pools.CompressionProvider is { })
         {
             RequestOptions |= ExecuteRequestOptions.Compressed;
         }
-        _message.Serialize(writer, SerializationContext);
-        RequestOptions = ExecuteRequestOptions.None;
-        GenericMethodArgs = null;
         RequestWriter = writer;
     }
 
@@ -133,12 +125,15 @@ internal abstract class InvokerOperation
         var writer = RequestWriter;
         RequestWriter = null;
 
-        ExecuteRequestMessage.ReplacePlaceholders(writer, Invoker.Id, Token, Invoker.RemoteId.GetAwaiter().GetResult());
+        _message.OperationId = new OperationId(Invoker.Id, Token);
+        _message.RemoteId = Invoker.RemoteId.GetAwaiter().GetResult();
+
+        _message.ReplacePlaceholders(writer);
 
         if (Connection.Pools.TryGetCompressor() is { } compressor)
         {
             var compressedWriter = Connection.Pools.GetWriter();
-            ExecuteRequestMessage.Compress(writer, compressor, compressedWriter);
+            _message.Compress(writer, compressor, compressedWriter);
             Connection.Pools.Return(writer);
             Connection.Pools.Return(compressor);
             writer = compressedWriter;
@@ -148,7 +143,8 @@ internal abstract class InvokerOperation
         {
             _cancellationTokenRegistration = CancellationToken.UnsafeRegister(static state =>
             {
-                ((InvokerOperation?)state)?.Cancel();
+                Debug.Assert(state is { });
+                ((InvokerOperation)state).Cancel();
             }, this);
         }
 

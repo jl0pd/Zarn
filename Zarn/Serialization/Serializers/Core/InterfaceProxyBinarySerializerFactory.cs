@@ -61,7 +61,7 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
 
         public static object ResolveInstance(ConnectionContext connection, ObjectId id)
         {
-            var invoker = connection.InstanceManager.GetInvoker(typeof(T), ObjectId.GenObjectId(), true);
+            var invoker = connection.InstanceManager.GetInvoker(typeof(T), connection.GenObjectId(), true);
             invoker.State.SetRemoteId(id);
             return invoker;
         }
@@ -80,7 +80,7 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
             {
                 State = new InvokerState(connection, id)
                 {
-                    Id = ObjectId.GenObjectId()
+                    Id = connection.GenObjectId()
                 },
             };
             return invoker;

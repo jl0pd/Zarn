@@ -29,9 +29,9 @@ public sealed class BinarySerializationContext
     private readonly List<BinarySerializerFactory> _factories =
     [
         EnumBinarySerializerFactory.Instance,
-        UnmanagedBinarySerializerFactory.Instance,
         ArrayBinarySerializerFactory.Instance,
         BinarySerializableFactory.Instance,
+        UnmanagedBinarySerializerFactory.Instance,
     ];
 
     internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()

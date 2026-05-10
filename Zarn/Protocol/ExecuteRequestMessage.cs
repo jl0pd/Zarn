@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Zarn.Compression;
 using Zarn.Serialization;
 
@@ -12,12 +11,18 @@ internal struct ExecuteRequestMessage
     public OperationId OperationId;
     public ObjectId RemoteId;
     public int MethodSlot;
-    public Type[]? GenericMethodArgs;
 
-    private const int NonCompressedLength = sizeof(MessageType)
-                                          + sizeof(ExecuteRequestOptions)
-                                          + OperationId.Size
-                                          + ObjectId.Size;
+    public const int MaxHeaderSize = sizeof(MessageType)
+                                   + sizeof(ExecuteRequestOptions)
+                                   + ObjectId.MaxSize
+                                   + OperationId.MaxSize
+                                   + sizeof(int);
+
+    private readonly int CompressedHeaderSize => sizeof(MessageType)
+                                               + sizeof(ExecuteRequestOptions)
+                                               + OperationId.CompressedSize
+                                               + RemoteId.CompressedSize
+                                               + PackedInt.GetRequiredSize(MethodSlot);
 
     public SequenceReader<byte> Deserialize(ChunkedArrayPoolBufferWriter<byte> message,
                                             BinarySerializationContext context,
@@ -29,7 +34,6 @@ internal struct ExecuteRequestMessage
 
         if (!Options.HasFlag(ExecuteRequestOptions.Compressed))
         {
-            DeserializeRest(ref reader, context);
             uncompressed = null;
             return reader;
         }
@@ -40,10 +44,7 @@ internal struct ExecuteRequestMessage
             decompressor.Decompress(reader.UnreadSequence, uncompressed);
             pools.Return(decompressor);
 
-            var uncompressedReader = uncompressed.GetReader();
-            DeserializeRest(ref uncompressedReader, context);
-
-            return uncompressedReader;
+            return uncompressed.GetReader();
         }
     }
 
@@ -55,53 +56,39 @@ internal struct ExecuteRequestMessage
         Options = context.Deserialize<ExecuteRequestOptions>(ref reader);
         OperationId = context.Deserialize<OperationId>(ref reader);
         RemoteId = context.Deserialize<ObjectId>(ref reader);
-    }
-
-    private void DeserializeRest(ref SequenceReader<byte> reader, BinarySerializationContext context)
-    {
         MethodSlot = context.Deserialize<int>(ref reader);
-        GenericMethodArgs = Options.HasFlag(ExecuteRequestOptions.GenericMethod)
-                            ? context.Deserialize<Type[]>(ref reader)
-                            : Type.EmptyTypes;
     }
 
-    public readonly void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
+    public readonly void ReplacePlaceholders(ChunkedArrayPoolBufferWriter<byte> writer)
     {
-        context.Serialize(MessageType.ExecuteRequest, writer);
-        context.Serialize(Options, writer);
-        context.Serialize(OperationId, writer);
-        context.Serialize(RemoteId, writer);
-        context.Serialize(MethodSlot, writer);
-        if (Options.HasFlag(ExecuteRequestOptions.GenericMethod))
-        {
-            Debug.Assert(GenericMethodArgs is { Length: > 0 });
-            context.Serialize(GenericMethodArgs, writer);
-        }
+        var chunk = writer.FirstChunkRequired;
+
+        var headerSize = CompressedHeaderSize;
+
+        var span = chunk.Array.AsSpan(chunk.Start - headerSize, headerSize);
+        span[0] = (byte)MessageType.ExecuteRequest;
+        span[1] = (byte)Options;
+        int advance = OperationId.Serialize(span[2..]) + 2;
+        advance += RemoteId.Serialize(span[advance..]);
+        PackedInt.Write(MethodSlot, span[advance..]);
+
+        chunk.Written += headerSize;
+        chunk.Start -= headerSize;
+        Debug.Assert(chunk.Start >= 0);
     }
 
-    public static void ReplacePlaceholders(ChunkedArrayPoolBufferWriter<byte> writer,
-                                           ObjectId invokerId,
-                                           short operationToken,
-                                           ObjectId remoteId)
+    public readonly void Compress(ChunkedArrayPoolBufferWriter<byte> writer,
+                                  ICompressor compressor,
+                                  ChunkedArrayPoolBufferWriter<byte> destination)
     {
-        var ar = writer.FirstChunkRequired.Array;
+        var chunk = writer.FirstChunkRequired;
 
-        var targetSpan = ar.AsSpan(PackedInt.MaxSize + sizeof(MessageType) + sizeof(ExecuteRequestOptions));
-        MemoryMarshal.Write(targetSpan, new OperationId(invokerId, operationToken));
-        targetSpan = targetSpan[OperationId.Size..];
+        var headerSize = CompressedHeaderSize;
 
-        MemoryMarshal.Write(targetSpan, remoteId);
-    }
+        destination.Reserve(PackedInt.MaxSize);
+        destination.Write(chunk.WrittenSpan[..headerSize]);
 
-    public static void Compress(ChunkedArrayPoolBufferWriter<byte> writer, ICompressor compressor, IBufferWriter<byte> destination)
-    {
-        var ar = writer.FirstChunkRequired.Array;
-
-        var nonCompressed = destination.GetSpan(PackedInt.MaxSize + NonCompressedLength);
-        ar.AsSpan(0, PackedInt.MaxSize + NonCompressedLength).CopyTo(nonCompressed);
-        destination.Advance(PackedInt.MaxSize + NonCompressedLength);
-
-        var source = writer.GetSequence().Slice(PackedInt.MaxSize + NonCompressedLength);
+        var source = writer.GetSequence().Slice(headerSize);
         compressor.Compress(source, destination);
     }
 }

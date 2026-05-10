@@ -39,7 +39,11 @@ internal sealed class InstanceManager : IInstanceManager
         _connection = connection;
         _pools = connection.Pools;
         _services = services;
-        _descriptors[CommunicationServices.InstanceManager] = new InstanceDescriptor(CommunicationServices.InstanceManager, this, GetCalleeFactory(typeof(IInstanceManager)), null);
+
+        var thisId = connection.IsServer
+                        ? CommunicationServices.ServerInstanceManagerId
+                        : CommunicationServices.ClientInstanceManagerId;
+        _descriptors[thisId] = new InstanceDescriptor(thisId, this, GetCalleeFactory(typeof(IInstanceManager)), null);
     }
 
     public InstanceDescriptor GetDescriptor(ObjectId id) => _descriptors[id];
@@ -51,11 +55,14 @@ internal sealed class InstanceManager : IInstanceManager
 
     public ObjectId Register(object instance, ICalleeFactory factory, CancellationTokenSource? cts)
     {
-        var remoteId = ObjectId.GenObjectId();
-        while (!_descriptors.TryAdd(remoteId, new InstanceDescriptor(remoteId, instance, factory, cts)))
+        var remoteId = _connection.GenObjectId();
+
+        _descriptors.AddOrUpdate(remoteId, new InstanceDescriptor(remoteId, instance, factory, cts), (k, v) =>
         {
-            remoteId = ObjectId.GenObjectId();
-        }
+            const string message = "Two objects with same id cannot exist";
+            Debug.Fail(message);
+            throw new Exception(message);
+        });
 
         return remoteId;
     }

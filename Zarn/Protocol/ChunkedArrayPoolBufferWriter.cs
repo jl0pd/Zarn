@@ -9,24 +9,31 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
     public sealed class Chunk : ReadOnlySequenceSegment<T>
     {
         public T[] Array = [];
+        public int Start;
         public int Written;
         public required int ChunkIndex;
 
-        public Span<T> WritableSpan => Array.AsSpan(Written);
-        public Memory<T> WritableMemory => Array.AsMemory(Written);
+        public Span<T> WritableSpan => Array.AsSpan(Start + Written);
+        public Memory<T> WritableMemory => Array.AsMemory(Start + Written);
 
-        public ReadOnlySpan<T> WrittenSpan => Array.AsSpan(0, Written);
-        public ReadOnlyMemory<T> WrittenMemory => Array.AsMemory(0, Written);
+        public ReadOnlySpan<T> WrittenSpan => Array.AsSpan(Start, Written);
+        public ReadOnlyMemory<T> WrittenMemory => Array.AsMemory(Start, Written);
 
-        public int Free => Array.Length - Written;
+        public int Free => Array.Length - Written - Start;
 
-        public new Chunk? Next => (Chunk?)base.Next;
-
-        public void SetNext(Chunk? next) => base.Next = next;
+        public new Chunk? Next
+        {
+            get => (Chunk?)base.Next;
+            set => base.Next = value;
+        }
 
         public void SetMemory() => Memory = WrittenMemory;
 
-        public void SetRunningIndex(long index) => RunningIndex = index;
+        public new long RunningIndex
+        {
+            get => base.RunningIndex;
+            set => base.RunningIndex = value;
+        }
     }
 
     public ReadOnlySequence<T> GetSequence()
@@ -38,9 +45,12 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
 
         Debug.Assert(LastChunk is { });
 
+        long runningIndex = 0;
         for (var current = FirstChunk; current is { }; current = current.Next)
         {
             current.SetMemory();
+            current.RunningIndex = runningIndex;
+            runningIndex += current.Written;
         }
 
         return new ReadOnlySequence<T>(FirstChunk, 0, LastChunk, LastChunk.Written);
@@ -54,9 +64,18 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
 
     public bool IsSingleChunk => FirstChunkRequired == LastChunk;
 
-    public long TotalLength => LastChunk is { } chunk
-                                ? chunk.RunningIndex + chunk.Written
-                                : 0;
+    public long TotalLength
+    {
+        get
+        {
+            long length = 0;
+            for (var current = FirstChunk; current is { }; current = current.Next)
+            {
+                length += current.Written;
+            }
+            return length;
+        }
+    }
 
     public void Reset()
     {
@@ -69,6 +88,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
 
             chunk.Array = [];
             chunk.Written = 0;
+            chunk.Start = 0;
         }
 
         LastChunk = null;
@@ -123,8 +143,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
         }
 
         var newChunk = currentChunk.Next ?? new Chunk() { ChunkIndex = currentChunk.ChunkIndex + 1 };
-        currentChunk.SetNext(newChunk);
-        newChunk.SetRunningIndex(currentChunk.RunningIndex + currentChunk.Written);
+        currentChunk.Next = newChunk;
         if (sizeHint > maxPoolSize)
         {
             newChunk.Array = new T[sizeHint];
