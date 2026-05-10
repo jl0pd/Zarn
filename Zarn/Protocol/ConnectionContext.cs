@@ -11,6 +11,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
     private readonly Stream _stream;
     private readonly ConcurrentQueue<ChunkedArrayPoolBufferWriter<byte>> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
+    private long _nextObjectId = CommunicationServices.LastReservedId;
 
     public int MaxConcurrentOperations { get; }
 
@@ -28,8 +29,11 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
     public IInstanceManager RemoteInstanceManager { get; }
 
-    public ConnectionContext(Stream stream, Pools pools, RpcSettings settings, IServiceProvider services)
+    public bool IsServer { get; }
+
+    public ConnectionContext(bool isServer, Stream stream, Pools pools, RpcSettings settings, IServiceProvider services)
     {
+        IsServer = isServer;
         _stream = stream;
         Pools = pools;
         Settings = settings;
@@ -39,7 +43,9 @@ internal sealed class ConnectionContext : IAsyncDisposable
         CalleeOperations = new CalleeOperations(MaxConcurrentOperations);
         ConcurrentOperationsSemaphore = new(MaxConcurrentOperations, MaxConcurrentOperations);
         InstanceManager = new InstanceManager(this, services);
-        RemoteInstanceManager = GetCommunicationService<IInstanceManager>(CommunicationServices.InstanceManager);
+        RemoteInstanceManager = GetCommunicationService<IInstanceManager>(isServer
+                                                                            ? CommunicationServices.ClientInstanceManagerId
+                                                                            : CommunicationServices.ServerInstanceManagerId);
     }
 
     private T GetCommunicationService<T>(ObjectId id) where T : class
@@ -48,6 +54,8 @@ internal sealed class ConnectionContext : IAsyncDisposable
         invoker.State.SetRemoteId(id);
         return (T)(object)invoker;
     }
+
+    public ObjectId GenObjectId() => new(Interlocked.Increment(ref _nextObjectId), IsServer);
 
     public ValueTask DisposeAsync()
     {

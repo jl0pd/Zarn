@@ -1,4 +1,5 @@
 using System.Buffers;
+using Zarn.Protocol;
 
 namespace Zarn.Serialization;
 
@@ -11,9 +12,9 @@ public static class BinarySerializerExtensions
         return writer.WrittenSpan.ToArray();
     }
 
-    public static void Reserve(this IBufferWriter<byte> writer, int reservedSize)
+    internal static void Reserve(this ChunkedArrayPoolBufferWriter<byte> writer, int reservedSize)
     {
         writer.GetSpan(reservedSize);
-        writer.Advance(reservedSize);
+        writer.FirstChunkRequired.Start += reservedSize;
     }
 }

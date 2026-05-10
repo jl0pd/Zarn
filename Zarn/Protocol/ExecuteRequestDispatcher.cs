@@ -34,7 +34,6 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
             var descriptor = connection.InstanceManager.GetDescriptor(message.RemoteId);
 
             CalleeBase callee = descriptor.CalleeFactory.Get();
-            callee.GenericMethodArgs = message.GenericMethodArgs;
             callee.Factory = descriptor.CalleeFactory;
             callee.Connection = connection;
             callee.OperationId = message.OperationId;

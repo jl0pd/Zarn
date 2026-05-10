@@ -15,7 +15,7 @@ internal sealed class EnumerableInvoker<T> : FinalizableInvokerBase, IEnumerable
         {
             State = new InvokerState(State.Connection, State.RemoteId.GetAwaiter().GetResult(), true, typeof(T))
             {
-                Id = ObjectId.GenObjectId(),
+                Id = State.Connection.GenObjectId(),
             },
         };
 
@@ -36,7 +36,7 @@ internal sealed class EnumerableInvoker<T> : FinalizableInvokerBase, IEnumerable
         {
             State = new InvokerState(State.Connection, State.RemoteId.GetAwaiter().GetResult(), false, typeof(T))
             {
-                Id = ObjectId.GenObjectId(),
+                Id = State.Connection.GenObjectId(),
             },
         };
 

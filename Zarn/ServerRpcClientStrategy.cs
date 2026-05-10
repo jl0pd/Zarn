@@ -82,7 +82,7 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
         }
 
         var connPools = new Pools(pools, response.Interfaces, request.Interfaces, chosenCompression);
-        return new ConnectionContext(stream, connPools, settings, Services);
+        return new ConnectionContext(true, stream, connPools, settings, Services);
     }
 
     public async ValueTask DisposeAsync()

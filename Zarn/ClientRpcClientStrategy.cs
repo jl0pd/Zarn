@@ -95,7 +95,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         var compressionProvider = GetCompression(response.ChosenCompression);
 
         var pools = new Pools(_pools, request.Interfaces, response.Interfaces, compressionProvider);
-        return new ConnectionContext(stream, pools, _settings, Services);
+        return new ConnectionContext(false, stream, pools, _settings, Services);
     }
 
     [return: NotNullIfNotNull(nameof(name))]

@@ -9,9 +9,9 @@ internal static class StreamHelper
 {
     public static ReadOnlyMemory<byte> PrepareFirstChunk(long totalLength, ChunkedArrayPoolBufferWriter<byte>.Chunk chunk)
     {
-        int skipBytes = PackedInt.MaxSize - PackedInt.GetRequiredSize(totalLength - PackedInt.MaxSize);
-        PackedInt.Write(totalLength - skipBytes, chunk.Array.AsSpan(skipBytes));
-        return chunk.Array.AsMemory(skipBytes, chunk.Written - skipBytes);
+        int requiredSize = PackedInt.GetRequiredSize(totalLength);
+        PackedInt.Write(totalLength + requiredSize, chunk.Array.AsSpan(chunk.Start - requiredSize));
+        return chunk.Array.AsMemory(chunk.Start - requiredSize, chunk.Written + requiredSize);
     }
 
     public static async ValueTask Send(Stream stream,

@@ -19,8 +19,6 @@ internal abstract class CalleeBase
 
     internal ICalleeFactory Factory { get; set; } = null!;
 
-    internal Type[]? GenericMethodArgs { get; set; }
-
     public void Dispatch(ref SequenceReader<byte> reader, int methodSlot)
     {
         try

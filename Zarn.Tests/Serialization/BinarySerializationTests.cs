@@ -43,8 +43,8 @@ public sealed class BinarySerializationTests
     }
 
     public static IEnumerable<object[]> GetObjectId()
-        => [[ObjectId.GenObjectId()]];
+        => [[new ObjectId(42, true)]];
 
     public static IEnumerable<object[]> GetOperationId()
-        => [[new OperationId(ObjectId.GenObjectId(), 7)]];
+        => [[new OperationId(new ObjectId(42, false), 7)]];
 }
