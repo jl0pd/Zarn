@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
 using BenchmarkDotNet.Attributes;

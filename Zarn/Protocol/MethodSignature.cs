@@ -14,7 +14,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
 {
     public static MethodSignature FromMethod(MethodInfo method)
     {
-        var ret = new SignatureType(method.ReturnType);
+        var ret = SignatureType.Create(method.ReturnType);
         var parameters = method.GetParameters();
         if (parameters.Length == 0)
         {
@@ -22,7 +22,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
         }
         else
         {
-            var @params = parameters.Select(x => new SignatureType(x.ParameterType)).ToArray();
+            var @params = parameters.Select(x => SignatureType.Create(x.ParameterType)).ToArray();
             return new MethodSignature(method.Name, @params, ret);
         }
     }
@@ -34,7 +34,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
             return false;
         }
 
-        if (ReturnType != new SignatureType(method.ReturnType))
+        if (ReturnType != SignatureType.Create(method.ReturnType))
         {
             return false;
         }
@@ -48,7 +48,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
 
         for (int i = 0; i < parameters.Length; i++)
         {
-            if (myParameters[i] != new SignatureType(parameters[i].ParameterType))
+            if (myParameters[i] != SignatureType.Create(parameters[i].ParameterType))
             {
                 return false;
             }
@@ -69,7 +69,7 @@ internal sealed record MethodSignature(string Name, SignatureType[] Parameters, 
         }
         else
         {
-            sb.AppendJoin(" -> ", Parameters);
+            sb.AppendJoin(" -> ", Parameters.AsEnumerable());
         }
 
         sb.Append(" -> ");

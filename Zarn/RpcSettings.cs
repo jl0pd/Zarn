@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Zarn.Collections;
 using Zarn.Compression;
 using Zarn.Serialization;
-using Zarn.Utils;
 
 namespace Zarn;
 

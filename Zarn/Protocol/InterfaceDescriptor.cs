@@ -4,13 +4,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Zarn.Serialization;
-using Zarn.Serialization.Serializers.Core;
 
 namespace Zarn.Protocol;
 
-internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
-                                           int GenericParameterCount,
-                                           MethodSignature[] Methods) : IBinarySerializable<InterfaceDescriptor>
+internal sealed record InterfaceDescriptor(SignatureType.Named Name, MethodSignature[] Methods) : IBinarySerializable<InterfaceDescriptor>
 {
     private Type? _resolvedType;
     private MethodInfo?[]? _resolvedMethods;
@@ -19,22 +16,17 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
     {
         Debug.Assert(type.IsInterface);
 
-        var name = TypeBinarySerializer.RemoveVersion(type.AssemblyQualifiedName);
-        Debug.Assert(name is { }, "Assembly qualified name is null only for generic type parameters");
-
-        var parameters = type.IsGenericType ? type.GenericTypeArguments.Length : 0;
-
         var methods = type
                         .GetMethods(BindingFlags.Public | BindingFlags.Instance)
                         .Select(MethodSignature.FromMethod)
                         .ToArray();
 
-        return new InterfaceDescriptor(name, parameters, methods);
+        return new InterfaceDescriptor((SignatureType.Named)SignatureType.Create(type), methods);
     }
 
     public Type? ResolveType()
     {
-        return _resolvedType ??= Type.GetType(AssemblyQualifiedName);
+        return _resolvedType ??= Type.GetType(Name.AssemblyQualifiedName);
     }
 
     public MethodInfo?[] ResolveMethods()
@@ -45,7 +37,7 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
     private  MethodInfo?[] ResolveMethodsCore()
     {
         var type = ResolveType()
-            ?? throw new InvalidOperationException("Unable to resolve methods for missing type: " + AssemblyQualifiedName);
+            ?? throw new InvalidOperationException("Unable to resolve methods for missing type: " + Name.AssemblyQualifiedName);
 
         var runtimeMethods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance);
 
@@ -71,17 +63,7 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
     [ExcludeFromCodeCoverage]
     public override string ToString()
     {
-        var sb = new StringBuilder(AssemblyQualifiedName);
-
-        if (GenericParameterCount > 0)
-        {
-            sb.Append('<');
-            for (int i = 0; i < GenericParameterCount; i++)
-            {
-                sb.Append(',');
-            }
-            sb.Append('>');
-        }
+        var sb = new StringBuilder(Name.ToString());
 
         foreach (var method in Methods)
         {
@@ -95,17 +77,15 @@ internal sealed record InterfaceDescriptor(string AssemblyQualifiedName,
 
     public static InterfaceDescriptor Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        var name = context.Deserialize<string>(ref source);
-        var count = context.Deserialize<int>(ref source);
+        var name = context.Deserialize<SignatureType>(ref source);
         var methods = context.Deserialize<MethodSignature[]>(ref source);
 
-        return new InterfaceDescriptor(name, count, methods);
+        return new InterfaceDescriptor((SignatureType.Named)name, methods);
     }
 
     public void Serialize(IBufferWriter<byte> writer, BinarySerializationContext context)
     {
-        context.Serialize(AssemblyQualifiedName, writer);
-        context.Serialize(GenericParameterCount, writer);
+        context.Serialize(Name, writer);
         context.Serialize(Methods, writer);
     }
 }

@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using Zarn.Serialization;
 
 namespace Zarn.Protocol;
 
@@ -121,7 +120,7 @@ internal sealed class InvokerState
     private InvokerOperation Remove(short opId)
     {
         InvokerOperation? op = null;
-        using (_lock.EnterScope())
+        lock (_lock)
         {
             // cannot use `Array.IndexOf(_operationIds, opId)` because `operationIds` may contain same id,
             // but corresponding operation will be null.
@@ -151,10 +150,10 @@ internal sealed class InvokerState
 
     public void RegisterOperation(InvokerOperation operation)
     {
-        using (_lock.EnterScope()) // spinlock most likely would be wasteful here. Lock.Enter does spin-waiting when needed
+        lock (_lock) // spinlock most likely would be wasteful here. Lock.Enter does spin-waiting when needed
         {
             _lastOpId++;
-            while (Array.IndexOf(_operationIds, _lastOpId, 0, _allocated) >= 0)
+            while (Array.IndexOf(_operationIds, _lastOpId) >= 0)
             {
                 _lastOpId++;
             }
@@ -163,6 +162,7 @@ internal sealed class InvokerState
             Debug.Assert(freeSlot >= 0);
             operation.Token = _lastOpId;
             _operations[freeSlot] = operation;
+            _operationIds[freeSlot] = _lastOpId;
             _allocated++;
         }
     }

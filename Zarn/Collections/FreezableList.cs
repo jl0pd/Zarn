@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
 
-namespace Zarn.Utils;
+namespace Zarn.Collections;
 
 internal sealed class FreezableList<T> : IList<T>, IReadOnlyList<T>, IList, ICollection<T>, IReadOnlyCollection<T>, ICollection
 {

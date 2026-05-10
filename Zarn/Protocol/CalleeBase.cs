@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using Zarn.Collections;
 using Zarn.Serialization;
 using Zarn.TypeGeneration;
 
@@ -106,6 +107,56 @@ internal abstract class CalleeBase
         Connection.Pools.Return(Interlocked.Exchange(ref Cts, null));
         Connection = null;
         Factory.Return(this);
+    }
+
+
+    internal protected GenericMethodInvokeTrampoline? TryFindTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                        ReadOnlySpan<Type> genericArgs)
+    {
+        var current = head;
+        while (current is { })
+        {
+            if (current.Value.Matches(genericArgs))
+            {
+                return current.Value;
+            }
+
+            current = Volatile.Read(ref current.Next);
+        }
+
+        return null;
+    }
+
+    internal protected GenericMethodInvokeTrampoline CreateTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                      Type trampolineType)
+    {
+        var trampoline = (GenericMethodInvokeTrampoline)Activator.CreateInstance(trampolineType)!;
+        var node = new SingleLinkedListNode<GenericMethodInvokeTrampoline>(trampoline);
+
+        var actual = Interlocked.CompareExchange(ref head, node, null);
+        if (actual is null)
+        {
+            // head was set
+            return trampoline;
+        }
+
+        var current = head;
+        while (true)
+        {
+            actual = Interlocked.CompareExchange(ref current.Next, node, null);
+            if (actual == null)
+            {
+                // value was set
+                return trampoline;
+            }
+            else if (actual.Value.GetType() == trampolineType)
+            {
+                // other trampoline with same type was set
+                return actual.Value;
+            }
+
+            current = Volatile.Read(ref current.Next);
+        }
     }
 
     internal protected void Fail(Exception e)

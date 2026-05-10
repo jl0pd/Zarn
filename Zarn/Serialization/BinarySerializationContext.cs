@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using Zarn.Protocol;
 using Zarn.Serialization.Serializers;
 using Zarn.Serialization.Serializers.Core;
+using Zarn.Serialization.Serializers.Core.Collections;
 using Zarn.Serialization.Serializers.Exceptions;
 
 namespace Zarn.Serialization;
@@ -31,6 +32,11 @@ public sealed class BinarySerializationContext
         EnumBinarySerializerFactory.Instance,
         ArrayBinarySerializerFactory.Instance,
         BinarySerializableFactory.Instance,
+        SmallArray0BinarySerializerFactory.Instance,
+        SmallArray1BinarySerializerFactory.Instance,
+        SmallArray2BinarySerializerFactory.Instance,
+        SmallArray3BinarySerializerFactory.Instance,
+        SmallArray4BinarySerializerFactory.Instance,
         UnmanagedBinarySerializerFactory.Instance,
     ];
 

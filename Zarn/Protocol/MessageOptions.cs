@@ -4,12 +4,7 @@ namespace Zarn.Protocol;
 internal enum ExecuteRequestOptions : byte
 {
     None = 0,
-
-    /// <summary>
-    /// Target method is generic
-    /// </summary>
-    GenericMethod = 0x01,
-    Compressed = 0x02,
+    Compressed = 0x01,
 }
 
 [Flags]

@@ -1,28 +1,11 @@
 using System.Buffers;
-using Zarn.Serialization.Serializers.Core;
 
 namespace Zarn.Serialization;
 
 public abstract class BinarySerializer<T> : BinarySerializer
 {
-    byte[]? _typePrefix;
-
-    internal override byte[] TypePrefix
-    {
-        get
-        {
-            if (_typePrefix is null)
-            {
-                var writer = new ArrayBufferWriter<byte>(256);
-                writer.GetSpan()[0] = (byte)ObjectType.Custom;
-                writer.Advance(1);
-                TypeBinarySerializer.Instance.Serialize(typeof(T), writer, null!);
-                _typePrefix = writer.WrittenSpan.ToArray();
-            }
-
-            return _typePrefix;
-        }
-    }
+    internal override byte[] TypePrefix => _typePrefix ??= GetTypePrefix(typeof(T));
+    internal byte[]? _typePrefix;
 
     public override bool CanConvert(Type type) => type.IsAssignableTo(typeof(T));
 
