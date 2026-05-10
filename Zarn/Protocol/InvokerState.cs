@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using Zarn.Serialization;
 
 namespace Zarn.Protocol;
 

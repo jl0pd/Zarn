@@ -4,7 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Zarn.Serialization;
-using Zarn.Serialization.Serializers.Core;
 
 namespace Zarn.Protocol;
 

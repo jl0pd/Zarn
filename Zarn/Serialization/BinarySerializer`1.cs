@@ -1,5 +1,4 @@
 using System.Buffers;
-using Zarn.Serialization.Serializers.Core;
 
 namespace Zarn.Serialization;
 
