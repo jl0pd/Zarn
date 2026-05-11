@@ -1,50 +1,22 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Reflection.Emit;
+using Zarn.Invocation;
 using Zarn.TypeGeneration;
 
 namespace Zarn.Protocol;
-
-internal interface IInstanceManager
-{
-    ValueTask<ObjectId> CreateInstance(int typeSlot, Type[] genericArgs);
-
-    ValueTask<ObjectId> GetEnumerator(ObjectId enumerableId, Type genArg);
-
-    ValueTask<ObjectId> GetAsyncEnumerator(ObjectId enumerableId, Type genArg);
-
-    ValueTask CancelAsyncEnumerator(ObjectId enumeratorId);
-
-    ValueTask RemoveObject(ObjectId id);
-}
 
 internal readonly record struct InstanceDescriptor(ObjectId Id,
                                                    object Instance,
                                                    ICalleeFactory CalleeFactory,
                                                    CancellationTokenSource? Cts);
 
-internal sealed class InstanceManager : IInstanceManager
+internal sealed class InstanceManager(ConnectionContext connection, IServiceProvider services)
 {
     private readonly ConcurrentDictionary<ObjectId, InstanceDescriptor> _descriptors = [];
     private readonly ConcurrentDictionary<ObjectId, InvokerState> _invokers = [];
-    private readonly ConcurrentDictionary<Type, Func<object, object>> _getEnumerator = [];
-    private readonly ConcurrentDictionary<Type, Func<object, CancellationToken, object>> _getAsyncEnumerator = [];
-    private readonly EnumeratorCalleeFactory _enumeratorCalleeFactory = new();
-    private readonly Pools _pools;
-    private readonly ConnectionContext _connection;
-    private readonly IServiceProvider _services;
+    private readonly Pools _pools = connection.Pools;
 
-    public InstanceManager(ConnectionContext connection, IServiceProvider services)
-    {
-        _connection = connection;
-        _pools = connection.Pools;
-        _services = services;
-
-        var thisId = connection.IsServer
-                        ? CommunicationServices.ServerInstanceManagerId
-                        : CommunicationServices.ClientInstanceManagerId;
-        _descriptors[thisId] = new InstanceDescriptor(thisId, this, GetCalleeFactory(typeof(IInstanceManager)), null);
-    }
+    public IServiceProvider Services => services;
 
     public InstanceDescriptor GetDescriptor(ObjectId id) => _descriptors[id];
 
@@ -55,7 +27,7 @@ internal sealed class InstanceManager : IInstanceManager
 
     public ObjectId Register(object instance, ICalleeFactory factory, CancellationTokenSource? cts)
     {
-        var remoteId = _connection.GenObjectId();
+        var remoteId = connection.GenObjectId();
 
         _descriptors.AddOrUpdate(remoteId, new InstanceDescriptor(remoteId, instance, factory, cts), (k, v) =>
         {
@@ -65,25 +37,6 @@ internal sealed class InstanceManager : IInstanceManager
         });
 
         return remoteId;
-    }
-
-    public ValueTask<ObjectId> CreateInstance(int typeSlot, Type[] genericArgs)
-    {
-        var calleeFactory = _pools.CalleeFactories[typeSlot - 1];
-        var calleeType = genericArgs.Length > 0
-            ? calleeFactory.InterfaceType.MakeGenericType(genericArgs)
-            : calleeFactory.InterfaceType;
-
-        var instance = _services.GetService(calleeType)
-            ?? throw ThrowHelper.Unreachable; // service must be registered
-
-        var factory = genericArgs.Length == 0
-                    ? calleeFactory.TryGetFactory(calleeFactory.InterfaceType)
-                    : calleeFactory.TryGetFactory(calleeFactory.InterfaceType, genericArgs);
-        Debug.Assert(factory is { });
-
-        var id = Register(instance, factory);
-        return ValueTask.FromResult(id);
     }
 
     public InvokerBase GetInvoker(Type invokerType, ObjectId id, bool finalizable)
@@ -120,7 +73,7 @@ internal sealed class InstanceManager : IInstanceManager
             invoker = factories[typeSlot].GetInvoker(finalizable);
         }
 
-        invoker.State = new InvokerState(_connection, typeSlot + 1, genericArgs)
+        invoker.State = new CommonInvokerState(connection, typeSlot + 1, genericArgs)
         {
             Id = id,
         };
@@ -142,44 +95,7 @@ internal sealed class InstanceManager : IInstanceManager
         });
     }
 
-    public ValueTask<ObjectId> GetAsyncEnumerator(ObjectId enumerableId, Type genArg)
-    {
-        var enumerable = _descriptors[enumerableId].Instance;
-        var cts = new CancellationTokenSource();
-        object enumerator;
-        try
-        {
-            enumerator = _getAsyncEnumerator.GetOrAdd(genArg, CreateInvokeGetAsyncEnumerator).Invoke(enumerable, cts.Token);
-        }
-        catch
-        {
-            cts.Dispose();
-            throw;
-        }
-
-        var id = Register(enumerator, _enumeratorCalleeFactory.GetFactory(genArg), cts);
-        return ValueTask.FromResult(id);
-    }
-
-    public ValueTask<ObjectId> GetEnumerator(ObjectId enumerableId, Type genArg)
-    {
-        var enumerable = _descriptors[enumerableId].Instance;
-        var enumerator = _getEnumerator.GetOrAdd(genArg, CreateInvokeGetEnumerator).Invoke(enumerable);
-
-        var id = Register(enumerator, _enumeratorCalleeFactory.GetFactory(genArg));
-        return ValueTask.FromResult(id);
-    }
-
-    public ValueTask CancelAsyncEnumerator(ObjectId enumeratorId)
-    {
-        var cts = _descriptors[enumeratorId].Cts;
-        Debug.Assert(cts is { });
-        cts.Cancel();
-
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask RemoveObject(ObjectId id)
+    public void RemoveObject(ObjectId id)
     {
         if (_descriptors.TryRemove(id, out var descriptor))
         {
@@ -189,8 +105,6 @@ internal sealed class InstanceManager : IInstanceManager
         {
             Debug.Fail("Object may not be removed twice");
         }
-
-        return ValueTask.CompletedTask;
     }
 
     public ICalleeFactory GetCalleeFactory(Type calleeType)
@@ -221,44 +135,5 @@ internal sealed class InstanceManager : IInstanceManager
 
 
         throw ThrowHelper.Unreachable;
-    }
-
-    private static Func<object, object> CreateInvokeGetEnumerator(Type genericArg)
-    {
-        var method = new DynamicMethod("", typeof(object), [typeof(object)]);
-
-        /*
-            return ((IEnumerable<T>)arg).GetEnumerator();
-        */
-
-        var type = typeof(IEnumerable<>).MakeGenericType(genericArg);
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, type);
-        il.Emit(OpCodes.Callvirt, type.GetMethod(nameof(IEnumerable<int>.GetEnumerator))!);
-        il.Emit(OpCodes.Ret);
-
-        return method.CreateDelegate<Func<object, object>>();
-    }
-
-    private static Func<object, CancellationToken, object> CreateInvokeGetAsyncEnumerator(Type genericArg)
-    {
-        var method = new DynamicMethod("", typeof(object), [typeof(object), typeof(CancellationToken)]);
-
-        /*
-            return ((IAsyncEnumerable<T>)arg).GetAsyncEnumerator(cancellationToken);
-        */
-
-        var type = typeof(IAsyncEnumerable<>).MakeGenericType(genericArg);
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, type);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, type.GetMethod(nameof(IAsyncEnumerable<int>.GetAsyncEnumerator))!);
-        il.Emit(OpCodes.Ret);
-
-        return method.CreateDelegate<Func<object, CancellationToken, object>>();
     }
 }

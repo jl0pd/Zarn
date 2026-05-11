@@ -1,8 +1,10 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using Zarn.Invocation;
 using Zarn.Protocol;
-using Zarn.Protocol.EnumerableSupport;
+using Zarn.EnumerableSupport;
 using Zarn.TypeGeneration;
+using Zarn.Protocol.Messages;
 
 namespace Zarn.Serialization.Serializers.Core;
 
@@ -62,7 +64,12 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
         public static object ResolveInstance(ConnectionContext connection, ObjectId id)
         {
             var invoker = connection.InstanceManager.GetInvoker(typeof(T), connection.GenObjectId(), true);
-            invoker.State.SetRemoteId(id);
+            var msg = new CreateInstanceMessageResponse
+            {
+                IsSuccess = true,
+                ObjectId = id
+            };
+            invoker.State.SetRemoteId(in msg);
             return invoker;
         }
     }
@@ -78,7 +85,7 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
         {
             var invoker = new EnumerableInvoker<T>
             {
-                State = new InvokerState(connection, id)
+                State = new ExistingInvokerState(connection, id)
                 {
                     Id = connection.GenObjectId()
                 },

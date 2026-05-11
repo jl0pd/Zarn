@@ -1,5 +1,5 @@
 using System.Reflection.Emit;
-using Zarn.Protocol;
+using Zarn.Invocation;
 using Zarn.Utils;
 
 namespace Zarn.TypeGeneration;

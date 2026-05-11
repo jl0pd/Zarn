@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Zarn.Collections;
 using Zarn.Compression;
-using Zarn.Protocol.EnumerableSupport;
+using Zarn.EnumerableSupport;
+using Zarn.Invocation;
 using Zarn.Serialization;
 using Zarn.TypeGeneration;
 using Zarn.Utils;
@@ -64,12 +66,30 @@ internal sealed class Pools
     private readonly ConcurrentDictionary<Type, Cache<InvokerOperation>> _invokerOperationsCache = new();
     private readonly Cache<ExecuteRequestDispatcher> _executeRequestDispatcherPool = new(() => new ExecuteRequestDispatcher());
     private readonly Cache<ExecuteResponseDispatcher> _executeResponseDispatcherPool = new(() => new ExecuteResponseDispatcher());
+    private readonly Cache<CtsCancelDispatcher> _ctsCancelDispatcherPool = new(() => new CtsCancelDispatcher());
+    private readonly Cache<CreateInstanceDispatcher> _createInstanceDispatcherPool = new(() => new CreateInstanceDispatcher());
+    private readonly Cache<GetEnumeratorDispatcher> _getEnumeratorDispatcherPool = new(() => new GetEnumeratorDispatcher());
     private readonly Cache<ICompressor>? _compressorPool;
     private readonly Cache<IDecompressor>? _decompressorPool;
 
     public ICompressor? TryGetCompressor() => _compressorPool?.Get();
 
     public IDecompressor? TryGetDecompressor() => _decompressorPool?.Get();
+
+    public GetEnumeratorDispatcher GetGetEnumeratorDispatcher()
+    {
+        return _getEnumeratorDispatcherPool.Get();
+    }
+
+    public CtsCancelDispatcher GetCtsCancelDispatcher()
+    {
+        return _ctsCancelDispatcherPool.Get();
+    }
+
+    public CreateInstanceDispatcher GetCreateInstanceDispatcher()
+    {
+        return _createInstanceDispatcherPool.Get();
+    }
 
     public ExecuteRequestDispatcher GetExecuteRequestDispatcher()
     {
@@ -124,6 +144,21 @@ internal sealed class Pools
     public CancellationTokenSource GetCts()
     {
         return _ctsPool.Get();
+    }
+
+    public void Return(GetEnumeratorDispatcher dispatcher)
+    {
+        _getEnumeratorDispatcherPool.Return(dispatcher);
+    }
+
+    public void Return(CreateInstanceDispatcher dispatcher)
+    {
+        _createInstanceDispatcherPool.Return(dispatcher);
+    }
+
+    public void Return(CtsCancelDispatcher dispatcher)
+    {
+        _ctsCancelDispatcherPool.Return(dispatcher);
     }
 
     public void Return(VoidOnCompletedWorker worker)

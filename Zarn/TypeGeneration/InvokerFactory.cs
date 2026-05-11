@@ -1,4 +1,5 @@
 using System.Reflection;
+using Zarn.Invocation;
 using Zarn.Protocol;
 
 namespace Zarn.TypeGeneration;

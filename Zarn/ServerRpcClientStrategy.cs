@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Zarn.Collections;
 using Zarn.Compression;
 using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 using Zarn.Serialization;
 
 namespace Zarn;

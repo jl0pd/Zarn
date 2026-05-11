@@ -1,6 +1,10 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Zarn.Collections;
+using Zarn.EnumerableSupport;
+using Zarn.Invocation;
+using Zarn.Protocol.Messages;
 using Zarn.Serialization;
 using Zarn.Utils;
 
@@ -11,7 +15,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
     private readonly Stream _stream;
     private readonly ConcurrentQueue<ChunkedArrayPoolBufferWriter<byte>> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
-    private long _nextObjectId = CommunicationServices.LastReservedId;
+    private long _nextObjectId = 1;
 
     public int MaxConcurrentOperations { get; }
 
@@ -27,8 +31,6 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
     public InstanceManager InstanceManager { get; }
 
-    public IInstanceManager RemoteInstanceManager { get; }
-
     public bool IsServer { get; }
 
     public ConnectionContext(bool isServer, Stream stream, Pools pools, RpcSettings settings, IServiceProvider services)
@@ -43,16 +45,6 @@ internal sealed class ConnectionContext : IAsyncDisposable
         CalleeOperations = new CalleeOperations(MaxConcurrentOperations);
         ConcurrentOperationsSemaphore = new(MaxConcurrentOperations, MaxConcurrentOperations);
         InstanceManager = new InstanceManager(this, services);
-        RemoteInstanceManager = GetCommunicationService<IInstanceManager>(isServer
-                                                                            ? CommunicationServices.ClientInstanceManagerId
-                                                                            : CommunicationServices.ServerInstanceManagerId);
-    }
-
-    private T GetCommunicationService<T>(ObjectId id) where T : class
-    {
-        var invoker = InstanceManager.GetInvoker(typeof(T), id, false);
-        invoker.State.SetRemoteId(id);
-        return (T)(object)invoker;
     }
 
     public ObjectId GenObjectId() => new(Interlocked.Increment(ref _nextObjectId), IsServer);
@@ -230,8 +222,23 @@ internal sealed class ConnectionContext : IAsyncDisposable
             case MessageType.ExecuteResponse:
                 HandleExecuteResponse(message);
                 break;
-            case MessageType.ExecuteCancel:
+            case MessageType.ExecuteCancelNotification:
                 HandleExecuteCancel(message);
+                break;
+            case MessageType.CreateInstanceRequest:
+                HandleCreateInstanceRequest(message);
+                break;
+            case MessageType.CreateInstanceResponse:
+                HandleCreateInstanceResponse(message);
+                break;
+            case MessageType.ObjectCollectedNotification:
+                HandleObjectCollectedNotification(message);
+                break;
+            case MessageType.GetEnumeratorRequest:
+                HandleGetEnumeratorRequest(message);
+                break;
+            case MessageType.CancelAsyncEnumeratorNotification:
+                HandleCancelAsyncEnumeratorNotification(message);
                 break;
             default:
                 Debug.Fail("Invalid message");
@@ -239,18 +246,92 @@ internal sealed class ConnectionContext : IAsyncDisposable
         }
     }
 
+    private void HandleObjectCollectedNotification(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var notification = ObjectCollectedNotification.Deserialize(ref reader, SerializationContext);
+        InstanceManager.RemoveObject(notification.InstanceId);
+    }
+
+    private void HandleGetEnumeratorRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var request = GetEnumeratorMessageRequest.Deserialize(ref reader, SerializationContext);
+
+        var dispatcher = Pools.GetGetEnumeratorDispatcher();
+        dispatcher.Connection = this;
+        dispatcher.InvokerId = request.InvokerId;
+        dispatcher.TypeArg = request.TypeArg;
+        dispatcher.IsAsync = request.IsAsync;
+        dispatcher.EnumerableId = request.EnumerableId;
+
+        InvokeDispatcher(dispatcher);
+    }
+
+    private void HandleCreateInstanceRequest(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var request = CreateInstanceMessageRequest.Deserialize(ref reader, SerializationContext);
+
+        var dispatcher = Pools.GetCreateInstanceDispatcher();
+        dispatcher.Connection = this;
+        dispatcher.InvokerId = request.InvokerId;
+        dispatcher.TypeSlot = request.TypeSlot;
+        dispatcher.GenericArgs = request.GenericArgs;
+
+        InvokeDispatcher(dispatcher);
+    }
+
+    private void HandleCancelAsyncEnumeratorNotification(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var response = CancelAsyncEnumeratorNotification.Deserialize(ref reader, SerializationContext);
+        var cts = InstanceManager.GetDescriptor(response.EnumeratorId).Cts;
+
+        Debug.Assert(cts is { });
+        InvokeCancellation(cts);
+    }
+
+    private void HandleCreateInstanceResponse(ChunkedArrayPoolBufferWriter<byte> message)
+    {
+        var reader = message.GetReader();
+        reader.Advance(1);
+
+        var response = CreateInstanceMessageResponse.Deserialize(ref reader, SerializationContext);
+        var invoker = InstanceManager.GetInvokerState(response.InvokerId);
+        invoker.SetRemoteId(in response);
+    }
+
     private void HandleExecuteCancel(ChunkedArrayPoolBufferWriter<byte> message)
     {
         var reader = message.GetReader();
         reader.Advance(1);
 
-        var opId = SerializationContext.Deserialize<OperationId>(ref reader);
+        var notification = ExecuteCancelNotification.Deserialize(ref reader, SerializationContext);
 
         // it's possible for cancellation to arrive after operation is already completed
-        if (CalleeOperations.Find(opId) is { } op)
+        if (CalleeOperations.Find(notification.OperationId) is { } op
+        && Interlocked.Exchange(ref op.Cts, null) is { } cts)
         {
-            Interlocked.Exchange(ref op.Cts, null)?.Cancel();
+            InvokeCancellation(cts);
         }
+    }
+
+    private void InvokeCancellation(CancellationTokenSource cts)
+    {
+        var dispatcher = Pools.GetCtsCancelDispatcher();
+        dispatcher.Connection = this;
+        dispatcher.CancellationTokenSource = cts;
+
+        InvokeDispatcher(dispatcher);
     }
 
     private void HandleExecuteRequest(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
@@ -259,7 +340,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
         dispatcher.MessageBuffer = messageBuffer;
         dispatcher.Connection = this;
 
-        ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
+        InvokeDispatcher(dispatcher);
     }
 
     private void HandleExecuteResponse(ChunkedArrayPoolBufferWriter<byte> messageBuffer)
@@ -268,6 +349,11 @@ internal sealed class ConnectionContext : IAsyncDisposable
         dispatcher.MessageBuffer = messageBuffer;
         dispatcher.Connection = this;
 
+        InvokeDispatcher(dispatcher);
+    }
+
+    private static void InvokeDispatcher(IThreadPoolWorkItem dispatcher)
+    {
         ThreadPool.UnsafeQueueUserWorkItem(dispatcher, false);
     }
 
@@ -275,5 +361,19 @@ internal sealed class ConnectionContext : IAsyncDisposable
     {
         _outputMessages.Enqueue(message);
         _outputMessagesEvent.Set();
+    }
+
+    public void Dispatch<T>(T message) where T : struct, IMessageInternal<T>
+    {
+        var writer = Pools.GetWriter();
+        writer.Reserve(PackedInt.MaxSize);
+
+        var span = writer.GetSpan();
+        span[0] = (byte)message.Type;
+        writer.Advance(1);
+
+        message.Serialize(writer, SerializationContext);
+
+        Dispatch(writer);
     }
 }

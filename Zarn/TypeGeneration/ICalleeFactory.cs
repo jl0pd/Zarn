@@ -1,4 +1,4 @@
-using Zarn.Protocol;
+using Zarn.Invocation;
 
 namespace Zarn.TypeGeneration;
 

@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 using Zarn.Collections;
-using Zarn.Protocol;
+using Zarn.Invocation;
 
 namespace Zarn.TypeGeneration;
 

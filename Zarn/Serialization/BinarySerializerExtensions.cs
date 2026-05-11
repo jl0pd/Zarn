@@ -1,5 +1,5 @@
 using System.Buffers;
-using Zarn.Protocol;
+using Zarn.Collections;
 
 namespace Zarn.Serialization;
 
