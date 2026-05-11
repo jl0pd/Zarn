@@ -120,7 +120,7 @@ internal sealed class InstanceManager : IInstanceManager
             invoker = factories[typeSlot].GetInvoker(finalizable);
         }
 
-        invoker.State = new InvokerState(_connection, typeSlot + 1, genericArgs)
+        invoker.State = new CommonInvokerState(_connection, typeSlot + 1, genericArgs)
         {
             Id = id,
         };

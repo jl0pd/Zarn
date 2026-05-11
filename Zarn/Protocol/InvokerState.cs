@@ -3,109 +3,39 @@ using System.Diagnostics;
 
 namespace Zarn.Protocol;
 
-internal sealed class InvokerState
+internal abstract class InvokerState(ConnectionContext connection)
 {
     public required ObjectId Id { get; init; }
 
-    public Task<ObjectId> RemoteId { get; }
+    public abstract Task<ObjectId> RemoteId { get; }
 
-    public ConnectionContext Connection { get; }
+    public ConnectionContext Connection { get; } = connection;
 
     private int _allocated = 0;
-    private readonly short[] _operationIds;
-    private readonly InvokerOperation?[] _operations;
+    private readonly short[] _operationIds = new short[connection.MaxConcurrentOperations];
+    private readonly InvokerOperation?[] _operations = new InvokerOperation[connection.MaxConcurrentOperations];
     private short _lastOpId;
     private readonly Lock _lock = new();
-    private readonly int _typeSlot;
-    private readonly Type[] _genericArgs;
-    private readonly SemaphoreSlim _semaphore;
-    private TaskCompletionSource<ObjectId>? _remoteIdTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly SemaphoreSlim _semaphore = connection.ConcurrentOperationsSemaphore;
     private int _remoteIdAcquiring = 0;
-    private readonly ObjectId _enumerableId;
-    private readonly bool _enumerableIsAsync;
-
-    public InvokerState(ConnectionContext context, int typeSlot, Type[] genericArgs)
-    {
-        _semaphore = context.ConcurrentOperationsSemaphore;
-        Connection = context;
-        _typeSlot = typeSlot;
-        _genericArgs = genericArgs;
-        _operationIds = new short[context.MaxConcurrentOperations];
-        _operations = new InvokerOperation[context.MaxConcurrentOperations];
-        RemoteId = _remoteIdTcs.Task;
-    }
-
-    public InvokerState(ConnectionContext context, ObjectId enumerableId, bool enumerableIsAsync, Type genericArg)
-    {
-        _semaphore = context.ConcurrentOperationsSemaphore;
-        Connection = context;
-        _typeSlot = -1;
-        _genericArgs = [genericArg];
-        _operationIds = new short[context.MaxConcurrentOperations];
-        _operations = new InvokerOperation[context.MaxConcurrentOperations];
-        RemoteId = _remoteIdTcs.Task;
-        _enumerableId = enumerableId;
-        _enumerableIsAsync = enumerableIsAsync;
-    }
-
-    public InvokerState(ConnectionContext context, ObjectId remoteId)
-    {
-        _semaphore = context.ConcurrentOperationsSemaphore;
-        Connection = context;
-        _typeSlot = -1;
-        _genericArgs = [];
-        _operationIds = new short[context.MaxConcurrentOperations];
-        _operations = new InvokerOperation[context.MaxConcurrentOperations];
-        RemoteId = Task.FromResult(remoteId);
-        _remoteIdTcs = null;
-        _remoteIdAcquiring = 1;
-    }
 
     public void SetRemoteId(ObjectId id)
     {
-        Debug.Assert(_remoteIdTcs is { });
-        _remoteIdTcs.SetResult(id);
-        _remoteIdTcs = null;
         _remoteIdAcquiring = 1; // prevent `BeginAcquireRemoteId` from running when it's already acquired.
+        SetRemoteIdCore(id);
     }
+
+    protected abstract void SetRemoteIdCore(ObjectId id);
 
     public void BeginAcquireRemoteId()
     {
         if (Interlocked.Exchange(ref _remoteIdAcquiring, 1) == 0)
         {
-            AcquireRemoteIdCore();
+            BeginAcquireRemoteIdCore();
         }
     }
 
-    private async void AcquireRemoteIdCore()
-    {
-        Debug.Assert(_remoteIdTcs is { });
-        try
-        {
-            ObjectId remoteId;
-            if (_typeSlot == -1)
-            {
-                if (_enumerableIsAsync)
-                {
-                    remoteId = await Connection.RemoteInstanceManager.GetAsyncEnumerator(_enumerableId, _genericArgs[0]);
-                }
-                else
-                {
-                    remoteId = await Connection.RemoteInstanceManager.GetEnumerator(_enumerableId, _genericArgs[0]);
-                }
-            }
-            else
-            {
-                remoteId = await Connection.RemoteInstanceManager.CreateInstance(_typeSlot, _genericArgs);
-            }
-
-            _remoteIdTcs.SetResult(remoteId);
-        }
-        catch (Exception e)
-        {
-            _remoteIdTcs.SetException(e);
-        }
-    }
+    protected abstract void BeginAcquireRemoteIdCore();
 
     public void Complete(short opId, Exception exception)
     {
@@ -170,5 +100,106 @@ internal sealed class InvokerState
     public void OnCollected()
     {
         //Debug.Fail("not implemented");
+    }
+}
+
+internal sealed class CommonInvokerState : InvokerState
+{
+    private readonly int _typeSlot;
+    private readonly Type[] _genericArgs;
+    private TaskCompletionSource<ObjectId>? _remoteIdTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public override Task<ObjectId> RemoteId { get; }
+
+    public CommonInvokerState(ConnectionContext connection, int typeSlot, Type[] genericArgs) : base(connection)
+    {
+        _typeSlot = typeSlot;
+        _genericArgs = genericArgs;
+        RemoteId = _remoteIdTcs.Task;
+    }
+
+    protected override void SetRemoteIdCore(ObjectId id)
+    {
+        Debug.Assert(_remoteIdTcs is { });
+        _remoteIdTcs.SetResult(id);
+        _remoteIdTcs = null;
+    }
+
+    protected override async void BeginAcquireRemoteIdCore()
+    {
+        Debug.Assert(_remoteIdTcs is { });
+        try
+        {
+            var rid = await Connection.RemoteInstanceManager.CreateInstance(_typeSlot, _genericArgs);
+            _remoteIdTcs.SetResult(rid);
+        }
+        catch (Exception e)
+        {
+            _remoteIdTcs.SetException(e);
+        }
+        _remoteIdTcs = null;
+    }
+}
+
+internal sealed class ExistingInvokerState(ConnectionContext connection, ObjectId remoteId) : InvokerState(connection)
+{
+    public override Task<ObjectId> RemoteId { get; } = Task.FromResult(remoteId);
+
+    protected override void BeginAcquireRemoteIdCore()
+    {
+        // RemoteId is already set in constructor
+        throw ThrowHelper.Unreachable;
+    }
+
+    protected override void SetRemoteIdCore(ObjectId id)
+    {
+        // RemoteId is already set in constructor
+        throw ThrowHelper.Unreachable;
+    }
+}
+
+internal sealed class EnumeratorInvokerState : InvokerState
+{
+    private readonly ObjectId _enumerableId;
+    private readonly bool _isAsync;
+    private readonly Type _typeArg;
+    private TaskCompletionSource<ObjectId>? _remoteIdTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public override Task<ObjectId> RemoteId { get; }
+
+    public EnumeratorInvokerState(ConnectionContext connection,
+                                  ObjectId enumerableId,
+                                  bool isAsync,
+                                  Type typeArg) : base(connection)
+    {
+        _enumerableId = enumerableId;
+        _isAsync = isAsync;
+        _typeArg = typeArg;
+        RemoteId = _remoteIdTcs.Task;
+    }
+
+    protected override void SetRemoteIdCore(ObjectId id)
+    {
+        Debug.Assert(_remoteIdTcs is { });
+        _remoteIdTcs.SetResult(id);
+        _remoteIdTcs = null;
+    }
+
+    protected override async void BeginAcquireRemoteIdCore()
+    {
+        Debug.Assert(_remoteIdTcs is { });
+        try
+        {
+            var rid = await (_isAsync
+                                ? Connection.RemoteInstanceManager.GetAsyncEnumerator(_enumerableId, _typeArg)
+                                : Connection.RemoteInstanceManager.GetEnumerator(_enumerableId, _typeArg));
+
+            _remoteIdTcs.SetResult(rid);
+        }
+        catch (Exception e)
+        {
+            _remoteIdTcs.SetException(e);
+        }
+        _remoteIdTcs = null;
     }
 }

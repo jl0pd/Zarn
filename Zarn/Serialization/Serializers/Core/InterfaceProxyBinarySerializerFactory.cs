@@ -78,7 +78,7 @@ internal sealed class InterfaceProxyBinarySerializerFactory(StrongBox<Connection
         {
             var invoker = new EnumerableInvoker<T>
             {
-                State = new InvokerState(connection, id)
+                State = new ExistingInvokerState(connection, id)
                 {
                     Id = connection.GenObjectId()
                 },

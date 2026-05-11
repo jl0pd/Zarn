@@ -5,6 +5,7 @@ namespace Zarn;
 
 internal static class ThrowHelper
 {
+    [DebuggerNonUserCode]
     [ExcludeFromCodeCoverage]
     public static Exception Unreachable
     {
@@ -29,6 +30,7 @@ internal static class ThrowHelper
     }
 
     [DoesNotReturn]
+    [DebuggerNonUserCode]
     [ExcludeFromCodeCoverage]
     public static Exception Fail(string message)
     {
