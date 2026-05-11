@@ -1,7 +1,8 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using Zarn.Invocation;
 using Zarn.Protocol;
-using Zarn.Protocol.EnumerableSupport;
+using Zarn.EnumerableSupport;
 using Zarn.TypeGeneration;
 
 namespace Zarn.Serialization.Serializers.Core;

@@ -1,8 +1,9 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Tasks.Sources;
+using Zarn.Invocation;
 
-namespace Zarn.Protocol.EnumerableSupport;
+namespace Zarn.EnumerableSupport;
 
 internal sealed class MoveNextInvokerOperation<T> : InvokerOperation, IValueTaskSource<bool>
 {

@@ -1,3 +1,4 @@
+using Zarn.Collections;
 using Zarn.Serialization;
 
 namespace Zarn.Protocol;

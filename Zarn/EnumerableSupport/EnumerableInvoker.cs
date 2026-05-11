@@ -1,7 +1,8 @@
 using System.Collections;
 using System.Diagnostics;
+using Zarn.Invocation;
 
-namespace Zarn.Protocol.EnumerableSupport;
+namespace Zarn.EnumerableSupport;
 
 internal sealed class EnumerableInvoker<T> : FinalizableInvokerBase, IEnumerable<T>, IAsyncEnumerable<T>
 {

@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
+using Zarn.Invocation;
 using Zarn.Protocol;
 using Zarn.Serialization;
 

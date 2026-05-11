@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 
-namespace Zarn.Protocol;
+namespace Zarn.Invocation;
 
 internal abstract class InvokerBase
 {

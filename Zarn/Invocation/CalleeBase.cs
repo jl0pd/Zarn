@@ -1,10 +1,12 @@
 using System.Buffers;
 using System.Diagnostics;
 using Zarn.Collections;
+using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 using Zarn.Serialization;
 using Zarn.TypeGeneration;
 
-namespace Zarn.Protocol;
+namespace Zarn.Invocation;
 
 internal abstract class CalleeBase
 {

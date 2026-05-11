@@ -1,8 +1,9 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Zarn.Invocation;
 
-namespace Zarn.Protocol.EnumerableSupport;
+namespace Zarn.EnumerableSupport;
 
 internal sealed class EnumeratorCallee<T> : CalleeBase
 {

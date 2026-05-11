@@ -1,4 +1,4 @@
-namespace Zarn.Protocol.EnumerableSupport;
+namespace Zarn.EnumerableSupport;
 
 [Flags]
 internal enum EnumeratorMethod : byte

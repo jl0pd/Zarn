@@ -1,6 +1,7 @@
 using System.Diagnostics;
+using Zarn.Protocol;
 
-namespace Zarn.Protocol;
+namespace Zarn.Invocation;
 
 internal sealed class CalleeOperations(int maxConcurrentOperations)
 {

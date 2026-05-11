@@ -1,9 +1,10 @@
 using System.Buffers;
 using System.Diagnostics;
+using Zarn.Collections;
 using Zarn.Compression;
 using Zarn.Serialization;
 
-namespace Zarn.Protocol;
+namespace Zarn.Protocol.Messages;
 
 internal struct ExecuteRequestMessage
 {

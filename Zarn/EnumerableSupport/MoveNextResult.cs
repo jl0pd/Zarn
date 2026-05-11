@@ -1,7 +1,7 @@
 using System.Buffers;
 using Zarn.Serialization;
 
-namespace Zarn.Protocol.EnumerableSupport;
+namespace Zarn.EnumerableSupport;
 
 internal readonly record struct MoveNextResult<T>(bool Success, T? Current) : IBinarySerializable<MoveNextResult<T>>
 {

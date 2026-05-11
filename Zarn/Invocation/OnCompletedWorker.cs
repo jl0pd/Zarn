@@ -1,4 +1,4 @@
-namespace Zarn.Protocol;
+namespace Zarn.Invocation;
 
 internal abstract class OnCompletedWorker
 {

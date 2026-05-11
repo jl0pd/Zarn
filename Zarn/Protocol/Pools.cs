@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Zarn.Collections;
 using Zarn.Compression;
-using Zarn.Protocol.EnumerableSupport;
+using Zarn.EnumerableSupport;
+using Zarn.Invocation;
 using Zarn.Serialization;
 using Zarn.TypeGeneration;
 using Zarn.Utils;

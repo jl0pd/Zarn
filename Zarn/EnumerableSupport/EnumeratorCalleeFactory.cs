@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
-using Zarn.Protocol;
-using Zarn.Protocol.EnumerableSupport;
+using Zarn.Invocation;
+using Zarn.TypeGeneration;
 using Zarn.Utils;
 
-namespace Zarn.TypeGeneration;
+namespace Zarn.EnumerableSupport;
 
 internal sealed class EnumeratorCalleeFactory
 {

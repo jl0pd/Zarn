@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace Zarn.Protocol;
+namespace Zarn.Collections;
 
 internal static class ChunkedArrayPoolBufferWriterExtensions
 {

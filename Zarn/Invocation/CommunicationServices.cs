@@ -1,4 +1,6 @@
-namespace Zarn.Protocol;
+using Zarn.Protocol;
+
+namespace Zarn.Invocation;
 
 internal static class CommunicationServices
 {

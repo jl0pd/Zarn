@@ -1,4 +1,4 @@
-namespace Zarn.Protocol;
+namespace Zarn.Protocol.Messages;
 
 internal enum ErrorCode : byte
 {

@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Collections;
 using System.Diagnostics;
 
-namespace Zarn.Protocol;
+namespace Zarn.Collections;
 
 internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int maxPoolSize) : IBufferWriter<T>
 {
