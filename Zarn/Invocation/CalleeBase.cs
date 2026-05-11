@@ -164,22 +164,7 @@ internal abstract class CalleeBase
     internal protected void Fail(Exception e)
     {
         Debug.Assert(Connection is { });
-        switch (Connection.Settings.UnhandledExceptionPropagationBehavior)
-        {
-            case UnhandledExceptionPropagationBehavior.Hidden:
-                FailCore(new UnhandledRpcException("Internal error has occurred"));
-                break;
-            case UnhandledExceptionPropagationBehavior.WrapToString:
-                FailCore(e as UnhandledRpcException ?? new UnhandledRpcException(e.ToString()));
-                break;
-            case UnhandledExceptionPropagationBehavior.TransparentWrap:
-                FailCore(e as UnhandledRpcException
-                    ?? new UnhandledRpcException("Unhandled exception has occurred. See InnerException for more details", e));
-                break;
-            case UnhandledExceptionPropagationBehavior.TransparentNoWrap:
-                FailCore(e);
-                break;
-        }
+        FailCore(Connection.Settings.WrapException(e));
     }
 
     private void FailCore(Exception e)

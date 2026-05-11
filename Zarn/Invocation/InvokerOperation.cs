@@ -176,10 +176,10 @@ internal abstract class InvokerOperation
     private void Cancel()
     {
         Debug.Assert(Connection is { } && SerializationContext is { } && Invoker is { });
-        var writer = Connection.Pools.GetWriter();
-        writer.Reserve(PackedInt.MaxSize);
-        SerializationContext.Serialize(MessageType.ExecuteCancel, writer);
-        SerializationContext.Serialize(new OperationId(Invoker.Id, Token), writer);
-        Connection.Dispatch(writer);
+
+        Connection.Dispatch(new ExecuteCancelNotification
+        {
+            OperationId = new OperationId(Invoker.Id, Token),
+        });
     }
 }

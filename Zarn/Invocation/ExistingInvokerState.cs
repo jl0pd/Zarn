@@ -1,4 +1,5 @@
 using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 
 namespace Zarn.Invocation;
 
@@ -12,7 +13,7 @@ internal sealed class ExistingInvokerState(ConnectionContext connection, ObjectI
         throw ThrowHelper.Unreachable;
     }
 
-    protected override void SetRemoteIdCore(ObjectId id)
+    protected override void SetRemoteIdCore(ref readonly CreateInstanceMessageResponse response)
     {
         // RemoteId is already set in constructor
         throw ThrowHelper.Unreachable;

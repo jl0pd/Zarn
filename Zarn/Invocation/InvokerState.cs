@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 
 namespace Zarn.Invocation;
 
@@ -20,13 +21,13 @@ internal abstract class InvokerState(ConnectionContext connection)
     private readonly SemaphoreSlim _semaphore = connection.ConcurrentOperationsSemaphore;
     private int _remoteIdAcquiring = 0;
 
-    public void SetRemoteId(ObjectId id)
+    public void SetRemoteId(ref readonly CreateInstanceMessageResponse message)
     {
         _remoteIdAcquiring = 1; // prevent `BeginAcquireRemoteId` from running when it's already acquired.
-        SetRemoteIdCore(id);
+        SetRemoteIdCore(in message);
     }
 
-    protected abstract void SetRemoteIdCore(ObjectId id);
+    protected abstract void SetRemoteIdCore(ref readonly CreateInstanceMessageResponse message);
 
     public void BeginAcquireRemoteId()
     {

@@ -152,4 +152,25 @@ public sealed class RpcSettings : ICloneable
             throw new InvalidOperationException("Current instance is frozen and cannot be modified");
         }
     }
+
+    internal Exception WrapException(Exception exception)
+    {
+        return UnhandledExceptionPropagationBehavior switch
+        {
+            UnhandledExceptionPropagationBehavior.Hidden
+                => new UnhandledRpcException("Internal error has occurred"),
+
+            UnhandledExceptionPropagationBehavior.WrapToString
+                => exception as UnhandledRpcException ?? new UnhandledRpcException(exception.ToString()),
+
+            UnhandledExceptionPropagationBehavior.TransparentWrap
+                => exception as UnhandledRpcException
+                    ?? new UnhandledRpcException("Unhandled exception has occurred. See InnerException for more details", exception),
+
+            UnhandledExceptionPropagationBehavior.TransparentNoWrap
+                => exception,
+
+            _ => throw ThrowHelper.Unreachable,
+        };
+    }
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 
 namespace Zarn.Invocation;
 
@@ -18,25 +19,28 @@ internal sealed class CommonInvokerState : InvokerState
         RemoteId = _remoteIdTcs.Task;
     }
 
-    protected override void SetRemoteIdCore(ObjectId id)
+    protected override void SetRemoteIdCore(ref readonly CreateInstanceMessageResponse message)
     {
         Debug.Assert(_remoteIdTcs is { });
-        _remoteIdTcs.SetResult(id);
+        if (message.IsSuccess)
+        {
+            _remoteIdTcs.SetResult(message.ObjectId);
+        }
+        else
+        {
+            _remoteIdTcs.SetException(message.Exception);
+        }
+
         _remoteIdTcs = null;
     }
 
-    protected override async void BeginAcquireRemoteIdCore()
+    protected override void BeginAcquireRemoteIdCore()
     {
-        Debug.Assert(_remoteIdTcs is { });
-        try
+        Connection.Dispatch(new CreateInstanceMessageRequest
         {
-            var rid = await Connection.RemoteInstanceManager.CreateInstance(_typeSlot, _genericArgs);
-            _remoteIdTcs.SetResult(rid);
-        }
-        catch (Exception e)
-        {
-            _remoteIdTcs.SetException(e);
-        }
-        _remoteIdTcs = null;
+            InvokerId = Id,
+            TypeSlot = _typeSlot,
+            GenericArgs = _genericArgs,
+        });
     }
 }

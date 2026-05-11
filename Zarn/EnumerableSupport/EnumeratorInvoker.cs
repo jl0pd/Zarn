@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Diagnostics;
 using Zarn.Invocation;
-using Zarn.Utils;
 
 namespace Zarn.EnumerableSupport;
 
@@ -28,7 +27,10 @@ internal sealed class EnumeratorInvoker<T> : FinalizableInvokerBase, IEnumerator
             var invoker = (EnumeratorInvoker<T>)state;
 
             var remoteId = invoker.State.RemoteId.GetAwaiter().GetResult();
-            invoker.State.Connection.RemoteInstanceManager.CancelAsyncEnumerator(remoteId).AsTask().Fire();
+            invoker.State.Connection.Dispatch(new CancelAsyncEnumeratorNotification
+            {
+                EnumeratorId = remoteId
+            });
         }, this);
     }
 

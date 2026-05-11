@@ -9,5 +9,13 @@ internal enum MessageType : byte
 
     ExecuteRequest = 3,
     ExecuteResponse = 4,
-    ExecuteCancel = 5,
+    ExecuteCancelNotification = 5,
+
+    CreateInstanceRequest = 6,
+    CreateInstanceResponse = 7,
+
+    ObjectCollectedNotification = 8,
+
+    GetEnumeratorRequest = 9, // responded with CreateInstanceResponse
+    CancelAsyncEnumeratorNotification = 10,
 }

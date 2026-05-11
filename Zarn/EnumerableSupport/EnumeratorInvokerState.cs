@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Zarn.Invocation;
 using Zarn.Protocol;
+using Zarn.Protocol.Messages;
 
 namespace Zarn.EnumerableSupport;
 
@@ -24,28 +25,28 @@ internal sealed class EnumeratorInvokerState : InvokerState
         RemoteId = _remoteIdTcs.Task;
     }
 
-    protected override void SetRemoteIdCore(ObjectId id)
+    protected override void SetRemoteIdCore(ref readonly CreateInstanceMessageResponse message)
     {
         Debug.Assert(_remoteIdTcs is { });
-        _remoteIdTcs.SetResult(id);
+        if (message.IsSuccess)
+        {
+            _remoteIdTcs.SetResult(message.ObjectId);
+        }
+        else
+        {
+            _remoteIdTcs.SetException(message.Exception);
+        }
         _remoteIdTcs = null;
     }
 
     protected override async void BeginAcquireRemoteIdCore()
     {
-        Debug.Assert(_remoteIdTcs is { });
-        try
+        Connection.Dispatch(new GetEnumeratorMessageRequest
         {
-            var rid = await (_isAsync
-                                ? Connection.RemoteInstanceManager.GetAsyncEnumerator(_enumerableId, _typeArg)
-                                : Connection.RemoteInstanceManager.GetEnumerator(_enumerableId, _typeArg));
-
-            _remoteIdTcs.SetResult(rid);
-        }
-        catch (Exception e)
-        {
-            _remoteIdTcs.SetException(e);
-        }
-        _remoteIdTcs = null;
+            InvokerId = Id,
+            EnumerableId = _enumerableId,
+            IsAsync = _isAsync,
+            TypeArg = _typeArg,
+        });
     }
 }
