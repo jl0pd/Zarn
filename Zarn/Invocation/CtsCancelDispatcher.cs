@@ -28,11 +28,9 @@ internal sealed class CtsCancelDispatcher : IThreadPoolWorkItem
         catch (ObjectDisposedException)
         {
         }
-        catch (AggregateException e)
+        catch (Exception e)
         {
-            var exception = connection.Settings.WrapException(e);
-            Debug.Fail(null);
-            throw new NotImplementedException(null, e);
+            connection.Fail(e);
         }
     }
 }

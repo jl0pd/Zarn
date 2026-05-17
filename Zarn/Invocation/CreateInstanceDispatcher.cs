@@ -27,25 +27,30 @@ internal sealed class CreateInstanceDispatcher : IThreadPoolWorkItem
 
         connection.Pools.Return(this);
 
-        var calleeFactory = connection.Pools.CalleeFactories[typeSlot - 1];
-        var calleeType = genericArgs.Length > 0
-            ? calleeFactory.InterfaceType.MakeGenericType(genericArgs)
-            : calleeFactory.InterfaceType;
-
-        var instance = connection.InstanceManager.Services.GetService(calleeType)
-            ?? throw ThrowHelper.Unreachable; // service must be registered
-
-        var factory = genericArgs.Length == 0
-                    ? calleeFactory.TryGetFactory(calleeFactory.InterfaceType)
-                    : calleeFactory.TryGetFactory(calleeFactory.InterfaceType, genericArgs);
-        Debug.Assert(factory is { });
-
         ObjectId instanceId = default;
         Exception? exception = null;
 
         try
         {
-            instanceId = connection.InstanceManager.Register(instance, factory);
+            var calleeFactory = connection.Pools.CalleeFactories[typeSlot - 1];
+            var calleeType = genericArgs.Length > 0
+                ? calleeFactory.InterfaceType.MakeGenericType(genericArgs)
+                : calleeFactory.InterfaceType;
+
+            var instance = connection.InstanceManager.Services.GetService(calleeType);
+            if (instance is null)
+            {
+                exception = new InvalidOperationException("Requested service cannot be found");
+            }
+            else
+            {
+                var factory = genericArgs.Length == 0
+                            ? calleeFactory.TryGetFactory(calleeFactory.InterfaceType)
+                            : calleeFactory.TryGetFactory(calleeFactory.InterfaceType, genericArgs);
+                Debug.Assert(factory is { });
+
+                instanceId = connection.InstanceManager.Register(instance, factory);
+            }
         }
         catch (Exception e)
         {

@@ -27,13 +27,14 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
 
         Unsafe.SkipInit(out ExecuteRequestMessage message);
 
-        var reader = message.Deserialize(messageBuffer,
-                                         connection.SerializationContext,
-                                         connection.Pools,
-                                         out var uncompressed);
-
+        ChunkedArrayPoolBufferWriter<byte>? uncompressed = null;
         try
         {
+            var reader = message.Deserialize(messageBuffer,
+                                             connection.SerializationContext,
+                                             connection.Pools,
+                                             out uncompressed);
+
             var descriptor = connection.InstanceManager.GetDescriptor(message.RemoteId);
 
             CalleeBase callee = descriptor.CalleeFactory.Get();
@@ -53,12 +54,11 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
             }
 
             callee.Dispatch(ref reader, message.MethodSlot - 1);
+
         }
         catch (Exception e)
         {
-            Debug.Fail("Exception was unexpected at this point. Ex: " + e);
-            // TODO: send Fail message
-            Environment.FailFast(null, e);
+            connection.Fail(e);
         }
 
         connection.Pools.Return(messageBuffer);

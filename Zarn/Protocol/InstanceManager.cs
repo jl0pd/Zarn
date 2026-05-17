@@ -33,7 +33,7 @@ internal sealed class InstanceManager(ConnectionContext connection, IServiceProv
         {
             const string message = "Two objects with same id cannot exist";
             Debug.Fail(message);
-            throw new Exception(message);
+            throw new InvalidOperationException(message);
         });
 
         return remoteId;
@@ -132,7 +132,6 @@ internal sealed class InstanceManager(ConnectionContext connection, IServiceProv
                 }
             }
         }
-
 
         throw ThrowHelper.Unreachable;
     }
