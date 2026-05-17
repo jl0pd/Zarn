@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using Zarn.Collections;
 using Zarn.EnumerableSupport;
 using Zarn.Invocation;
@@ -15,6 +16,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
     private readonly Stream _stream;
     private readonly ConcurrentQueue<ChunkedArrayPoolBufferWriter<byte>> _outputMessages = new();
     private readonly AsyncAutoResetEvent _outputMessagesEvent = new();
+    private ExceptionDispatchInfo? _failure;
     private long _nextObjectId = 1;
 
     public int MaxConcurrentOperations { get; }
@@ -51,6 +53,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
+        ConcurrentOperationsSemaphore.Dispose();
         return _stream.DisposeAsync();
     }
 
@@ -65,6 +68,8 @@ internal sealed class ConnectionContext : IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             await _outputMessagesEvent.WaitAsync();
+            _failure?.Throw();
+
             if (cancellationToken.IsCancellationRequested)
             {
                 break;
@@ -214,7 +219,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
         switch (type)
         {
             case MessageType.Error:
-                throw ThrowHelper.Fail("Error message received");
+                throw new InvalidOperationException("Error message received");
 
             case MessageType.ExecuteRequest:
                 HandleExecuteRequest(message);
@@ -241,8 +246,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
                 HandleCancelAsyncEnumeratorNotification(message);
                 break;
             default:
-                Debug.Fail("Invalid message");
-                break;
+                throw new InvalidDataException("Invalid message was received:" + type);
         }
     }
 
@@ -375,5 +379,11 @@ internal sealed class ConnectionContext : IAsyncDisposable
         message.Serialize(writer, SerializationContext);
 
         Dispatch(writer);
+    }
+
+    public void Fail(Exception exception)
+    {
+        Interlocked.CompareExchange(ref _failure, ExceptionDispatchInfo.Capture(exception), null);
+        _outputMessagesEvent.Set();
     }
 }

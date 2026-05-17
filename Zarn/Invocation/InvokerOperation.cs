@@ -77,30 +77,47 @@ internal abstract class InvokerOperation
 
     protected void StartCommon()
     {
-        CancellationToken.ThrowIfCancellationRequested();
-        Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
+        StartCommonCore(true);
+    }
 
-        var ridTask = Invoker.RemoteId;
-        if (ridTask.IsCompleted)
+    private void StartCommonWhenCompleted()
+    {
+        StartCommonCore(false);
+    }
+
+    private void StartCommonCore(bool isSynchronous)
+    {
+        try
         {
-            ridTask.GetAwaiter().GetResult();
+            CancellationToken.ThrowIfCancellationRequested();
+            Debug.Assert(RequestWriter is { } && Connection is { } && Invoker is { });
 
-            var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
-            if (waitTask.IsCompleted)
+            var ridTask = Invoker.RemoteId;
+            if (ridTask.IsCompleted)
             {
-                waitTask.GetAwaiter().GetResult(); // throw exception is there's any
-                StartCore();
+                ridTask.GetAwaiter().GetResult();
+
+                var waitTask = Invoker.WaitForFreeOperationSlot(CancellationToken);
+                if (waitTask.IsCompleted)
+                {
+                    waitTask.GetAwaiter().GetResult(); // throw exception is there's any
+                    StartCore();
+                }
+                else
+                {
+                    _waitForFreeOperationSlot = waitTask;
+                    waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+                }
             }
             else
             {
-                _waitForFreeOperationSlot = waitTask;
-                waitTask.GetAwaiter().UnsafeOnCompleted(_startCoreAction ??= StartCore);
+                ridTask.GetAwaiter().UnsafeOnCompleted(_onRemoteIdReadyAction ??= StartCommonWhenCompleted);
+                Invoker.BeginAcquireRemoteId();
             }
         }
-        else
+        catch (Exception e) when (!isSynchronous)
         {
-            ridTask.GetAwaiter().UnsafeOnCompleted(_onRemoteIdReadyAction ??= StartCommon);
-            Invoker.BeginAcquireRemoteId();
+            Complete(e);
         }
     }
 

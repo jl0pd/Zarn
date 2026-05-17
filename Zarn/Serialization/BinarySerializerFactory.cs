@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 
 namespace Zarn.Serialization;
 
@@ -7,14 +6,7 @@ public abstract class BinarySerializerFactory : BinarySerializer
 {
     public abstract BinarySerializer CreateSerializer(Type type);
 
-    internal override byte[] TypePrefix
-    {
-        get
-        {
-            Debug.Fail("Unreachable");
-            throw new Exception("Unreachable");
-        }
-    }
+    internal override byte[] TypePrefix => throw ThrowHelper.Unreachable;
 
     public sealed override void Serialize(object? value, Type type, IBufferWriter<byte> writer, BinarySerializationContext context)
     {

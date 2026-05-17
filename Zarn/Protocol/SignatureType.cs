@@ -187,7 +187,7 @@ internal abstract class SignatureType : IEquatable<SignatureType>, IBinarySerial
         {
             if (!type.IsSZArray)
             {
-                throw new NotSupportedException("Only single dimension zero-based array are supported");
+                throw new NotSupportedException("Only single dimension zero-based arrays are supported");
             }
 
             return new Array(Create(type.GetElementType()!));
