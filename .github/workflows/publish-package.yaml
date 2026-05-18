@@ -19,7 +19,7 @@ jobs:
         run: dotnet restore
 
       - name: Pack
-        run:
+        run: |
           dotnet pack Zarn/Zarn.csproj --no-restore /p:TreatWarningsAsErrors=true
           dotnet pack Zarn.AspNetCore/Zarn.AspNetCore.csproj --no-restore /p:TreatWarningsAsErrors=true
 
