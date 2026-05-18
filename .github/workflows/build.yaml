@@ -36,10 +36,10 @@ jobs:
             /p:CoverletOutputDirectory="artifacts/tests"
 
       - name: Publish Zarn
-        run: dotnet publish -c release -p Zarn/Zarn.csproj --no-restore
+        run: dotnet publish -c release --project Zarn/Zarn.csproj --no-restore
 
       - name: Publish Zarn.AspNetCore
-        run: dotnet publish -c release -p Zarn.AspNetCore/Zarn.AspNetCore.csproj --no-restore
+        run: dotnet publish -c release --project Zarn.AspNetCore/Zarn.AspNetCore.csproj --no-restore
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v7
