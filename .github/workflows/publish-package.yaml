@@ -26,5 +26,6 @@ jobs:
       - name: Publish
         run:
           dotnet nuget push artifacts/packages/* \
+            --source https://api.nuget.org/v3/index.json \
             --skip-duplicate \
             --api-key "${{ secrets.NUGET_API_KEY }}"
