@@ -17,6 +17,8 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <Version>0.1.0.0</Version>
+    <IsPackable>false</IsPackable>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>

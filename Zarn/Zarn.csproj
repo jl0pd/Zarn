@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <PackageId>zarn</PackageId>
+    <PackageTags>rpc</PackageTags>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Zarn.Tests" />
     <InternalsVisibleTo Include="Benchmarks.Client" />

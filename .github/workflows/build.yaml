@@ -35,13 +35,19 @@ jobs:
             /p:CoverletOutputFormat=xml \
             /p:CoverletOutputDirectory="artifacts/tests"
 
-      - name: Publish Zarn
-        run: dotnet publish Zarn/Zarn.csproj --no-restore
+      - name: Pack Zarn
+        run: dotnet pack Zarn/Zarn.csproj --no-restore
 
-      - name: Publish Zarn.AspNetCore
-        run: dotnet publish Zarn.AspNetCore/Zarn.AspNetCore.csproj --no-restore
+      - name: Pack Zarn.AspNetCore
+        run: dotnet pack Zarn.AspNetCore/Zarn.AspNetCore.csproj --no-restore
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v7
         with:
-            path: artifacts/tests
+          path: artifacts/tests
+
+      - name: Upload packages to github
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/packages
+          archive: false
