@@ -52,6 +52,8 @@ jobs:
     needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    environment:
+      name: "Deploy"
     steps:
       - name: "Download Artifact"
         uses: actions/download-artifact@v8
