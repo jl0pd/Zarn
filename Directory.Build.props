@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package properties">
-    <Version>0.1.0.1</Version>
+    <Version>0.1.0.2</Version>
     <IsPackable>false</IsPackable>
     <Company>jl0pd</Company>
 
