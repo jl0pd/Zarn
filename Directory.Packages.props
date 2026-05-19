@@ -22,4 +22,9 @@
     <PackageVersion Include="Grpc.Tools" Version="2.80.0" />
   </ItemGroup>
 
+  <ItemGroup Label="packaging">
+    <PackageVersion Include="MinVer" Version="7.0.0" />
+    <PackageVersion Include="Microsoft.SourceLink.Github" Version="10.0.300" />
+  </ItemGroup>
+
 </Project>

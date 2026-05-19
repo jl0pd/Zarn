@@ -16,16 +16,30 @@
     <AnalysisMode>all</AnalysisMode>
   </PropertyGroup>
 
-  <PropertyGroup>
+  <PropertyGroup Label="Package properties">
     <Version>0.1.0.0</Version>
     <IsPackable>false</IsPackable>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <Company>jl0pd</Company>
+
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
+    <IncludeSource>true</IncludeSource>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <PackageLicenseExpression>LGPL-2.1-only</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
     <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <RepositoryUrl>https://github.com/jl0pd/zarn</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jl0pd/zarn</PackageProjectUrl>
+    <PackageReleaseNodes>https://github.com/jl0pd/zarn/releases</PackageReleaseNodes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+    <PackageReference Include="MinVer" PrivateAssets="all" />
+  </ItemGroup>
 
   <PropertyGroup>
     <BaseOutputPath>$(MSBuildThisFileDirectory)artifacts/bin/$(MSBuildProjectName)</BaseOutputPath>
