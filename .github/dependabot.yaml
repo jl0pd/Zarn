@@ -5,6 +5,7 @@ updates:
     labels:
       - "dependencies"
     open-pull-requests-limit: 10
+    prefix: "deps: "
     schedule:
       interval: "daily"
   - package-ecosystem: "github-actions"
@@ -12,5 +13,6 @@ updates:
     labels:
       - "dependencies"
     open-pull-requests-limit: 10
+    prefix: "deps: "
     schedule:
       interval: "daily"
