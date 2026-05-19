@@ -42,6 +42,10 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <BaseOutputPath>$(MSBuildThisFileDirectory)artifacts/bin/$(MSBuildProjectName)</BaseOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)artifacts/obj/$(MSBuildProjectName)</BaseIntermediateOutputPath>
     <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages/</PackageOutputPath>
