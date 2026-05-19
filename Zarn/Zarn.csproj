@@ -4,11 +4,16 @@
     <PackageId>zarn</PackageId>
     <PackageTags>rpc</PackageTags>
     <IsPackable>true</IsPackable>
+    <Description>Zero-Allocation Rpc for dotNet</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Zarn.Tests" />
     <InternalsVisibleTo Include="Benchmarks.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

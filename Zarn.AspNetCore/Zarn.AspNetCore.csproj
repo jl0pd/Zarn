@@ -4,6 +4,7 @@
     <PackageId>zarn.aspNetCore</PackageId>
     <PackageTags>rpc aspnet</PackageTags>
     <IsPackable>true</IsPackable>
+    <Description>Asp.Net support for Zarn</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,4 +16,7 @@
     <ProjectReference Include="..\Zarn\Zarn.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../LICENSE" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
 </Project>
