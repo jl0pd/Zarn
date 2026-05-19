@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package properties">
-    <Version>0.1.0.3</Version>
+    <Version>0.1.1</Version>
     <IsPackable>false</IsPackable>
     <Company>jl0pd</Company>
 
@@ -44,6 +44,7 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <MinVerSkip Condition="'$(Configuration)' == 'Debug'">true</MinVerSkip>
     <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
