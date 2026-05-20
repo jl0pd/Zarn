@@ -36,9 +36,9 @@ public abstract class RpcTestsBase
 
         await using var client = new RpcClient(RpcStreamProvider.FromStream(clientStream), settings);
 
-        var serverClientTask = server.AcceptSingleClient();
+        var serverClientTask = server.AcceptSingleClient(TestContext.Current.CancellationToken);
 
-        await client.ConnectAsync(CancellationToken.None);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
         var serverClient = await serverClientTask;
 
         var remoteImpl = client.GetRemoteService<TInterface>();
