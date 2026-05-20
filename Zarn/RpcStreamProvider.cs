@@ -64,11 +64,18 @@ public abstract class RpcStreamProvider : IAsyncDisposable
     private sealed class ListenPort(IPEndPoint endpoint) : RpcStreamProvider
     {
         private TcpListener? _listener = new(endpoint);
+        private bool _isStarted;
 
         public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
             var listener = _listener;
             ObjectDisposedException.ThrowIf(listener is null, this);
+
+            if (!_isStarted)
+            {
+                listener.Start();
+                _isStarted = true;
+            }
 
             var socket = await listener.AcceptSocketAsync(cancellationToken);
             return new NetworkStream(socket, true);
@@ -93,7 +100,7 @@ public abstract class RpcStreamProvider : IAsyncDisposable
             {
                 Version = s_v20,
                 VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
-                Method  = HttpMethod.Post,
+                Method = HttpMethod.Post,
                 RequestUri = address,
                 Headers = { TransferEncodingChunked = true },
                 Content = new PostStreamContent(async (stream, ct) =>
@@ -117,10 +124,10 @@ public abstract class RpcStreamProvider : IAsyncDisposable
         // https://github.com/davidfowl/StreamingSample/blob/020357917831f1e74432277b0a95be4e11050ddb/client/PostStreamContent.cs
         private sealed class PostStreamContent(Func<Stream, CancellationToken, Task> generator) : HttpContent
         {
-            protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) 
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
                 => generator(stream, CancellationToken.None);
 
-            protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken) 
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
                 => generator(stream, cancellationToken);
 
             protected override bool TryComputeLength(out long length)
