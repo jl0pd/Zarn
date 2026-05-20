@@ -88,11 +88,6 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             throw new ProtocolViolationException("An error occurred on attempt to establish connection: " + response.ErrorCode);
         }
 
-        if (response.IsLittleEndian != BitConverter.IsLittleEndian)
-        {
-            throw new NotSupportedException("Server has different endianness");
-        }
-
         var compressionProvider = GetCompression(response.ChosenCompression);
 
         var pools = new Pools(_pools, request.Interfaces, response.Interfaces, compressionProvider);
