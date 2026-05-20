@@ -8,14 +8,21 @@ internal sealed class PackedLongBinarySerializer : BinarySerializer<long>
 
     public override long Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        if (PackedInt.TryRead(source.UnreadSpan, out long value, out int consumed))
+        if (!PackedInt.TryRead(source.UnreadSpan, out long value, out int consumed))
         {
-            // value was read from single span, fast path
-            source.Advance(consumed);
-            return value;
+            // value is spanning multiple chunks, slow path
+            Span<byte> span = stackalloc byte[consumed];
+            source.UnreadSequence.Slice(0, consumed).CopyTo(span);
+
+            if (!PackedInt.TryRead(span, out value, out consumed))
+            {
+                throw new InvalidDataException();
+            }
         }
 
-        throw new NotImplementedException();
+        source.Advance(consumed);
+        return checked(value);
+
     }
 
     public override void Serialize(long value, IBufferWriter<byte> writer, BinarySerializationContext context)
