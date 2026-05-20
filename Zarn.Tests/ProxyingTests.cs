@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Zarn.Tests.TestTypes;
 using Zarn.Tests.Utils;
 
@@ -60,18 +61,19 @@ public sealed class ProxyingTests : RpcTestsBase
     [Fact]
     public Task ReturnedSeqThrowsOnCancel() => RunConnectToServerTest<IEnumerableProvider, EnumerableProvider>(async (inst) =>
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.2));
+        using var cts = new CancellationTokenSource();
 
-        int last = -1;
+        bool enumerated = false;
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await foreach (var item in inst.GetInfiniteAsync().WithCancellation(cts.Token))
             {
-                last = item;
+                enumerated = true;
+                cts.Cancel();
             }
         });
 
-        Assert.NotEqual(-1, last);
+        Assert.True(enumerated);
     });
 
     [Fact]
@@ -79,7 +81,16 @@ public sealed class ProxyingTests : RpcTestsBase
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.2));
 
-        var result = await inst.LastBeforeThrowAsync(new InfiniteAsyncEnumerable(), cts.Token);
+        var ctsBox = new StrongBox<CancellationTokenSource?>(cts);
+        var sourceSeq = new InfiniteAsyncEnumerable();
+
+        var cancellable = sourceSeq.Select(x =>
+        {
+            Interlocked.Exchange(ref ctsBox.Value, null)?.Cancel();
+            return x;
+        });
+
+        var result = await inst.LastBeforeThrowAsync(cancellable, cts.Token);
 
         Assert.NotEqual(-1, result);
     });

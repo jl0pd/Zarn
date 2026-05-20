@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Zarn.Tests.Utils;
 
 internal static class AsyncEnumerable
@@ -29,6 +31,16 @@ internal static class AsyncEnumerable
         }
 
         return result.ToArray();
+    }
+
+    public static async IAsyncEnumerable<TResult> Select<TSource, TResult>(this IAsyncEnumerable<TSource> source,
+                                                                           Func<TSource, TResult> selector,
+                                                                           [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var item in source.WithCancellation(cancellationToken))
+        {
+            yield return selector(item);
+        }
     }
 
     private sealed class AsyncOverSync<T>(IEnumerable<T> source) : IAsyncEnumerable<T>
