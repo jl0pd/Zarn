@@ -53,7 +53,7 @@ public sealed class ProxyingTests : RpcTestsBase
     [Fact]
     public Task AsyncEnumerableToArray() => RunConnectToServerTest<IToArray, ToArray>(async (inst) =>
     {
-        var result = await inst.ToArrayAsync(Enumerable.Range(0, 5).AsAsyncEnumerable(), CancellationToken.None);
+        var result = await inst.ToArrayAsync(Enumerable.Range(0, 5).AsAsyncEnumerable(), TestContext.Current.CancellationToken);
         Assert.Equal([0, 1, 2, 3, 4], result);
     });
 
