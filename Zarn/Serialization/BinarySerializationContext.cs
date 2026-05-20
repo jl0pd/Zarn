@@ -25,6 +25,11 @@ public sealed class BinarySerializationContext
         { typeof(byte[]), ByteArrayBinarySerializer.Instance },
         { typeof(object[]), ObjectArrayBinarySerializer.Instance },
         { typeof(CancellationToken), CancellationTokenBinarySerializer.Instance },
+
+        // these serializers are not required by protocol, supplied by default for convenience
+        { typeof(Half), Float16BinarySerializer.Instance },
+        { typeof(float), Float32BinarySerializer.Instance },
+        { typeof(double), Float64BinarySerializer.Instance },
     };
 
     private readonly List<BinarySerializerFactory> _factories =
@@ -37,7 +42,6 @@ public sealed class BinarySerializationContext
         SmallArray2BinarySerializerFactory.Instance,
         SmallArray3BinarySerializerFactory.Instance,
         SmallArray4BinarySerializerFactory.Instance,
-        UnmanagedBinarySerializerFactory.Instance,
     ];
 
     internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()

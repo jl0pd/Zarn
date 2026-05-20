@@ -66,7 +66,6 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
         var chosenCompression = GetCompression(request.SupportedCompressions);
         var response = new HandshakeResponseMessage
         {
-            IsLittleEndian = BitConverter.IsLittleEndian,
             ChosenCompression = chosenCompression?.AlgorithmName,
             Interfaces = interfaceDescriptors,
             ErrorCode = errorCode,

@@ -10,8 +10,6 @@ internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeRe
 
     public required ErrorCode ErrorCode { get; set; }
 
-    public required bool IsLittleEndian { get; set; }
-
     public required string? ChosenCompression { get; set; }
 
     public required InterfaceDescriptor[] Interfaces { get; set; } = [];
@@ -26,7 +24,6 @@ internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeRe
         return new HandshakeResponseMessage
         {
             ErrorCode = context.Deserialize<ErrorCode>(ref reader),
-            IsLittleEndian = context.Deserialize<bool>(ref reader),
             ChosenCompression = context.Deserialize<string?>(ref reader),
             Interfaces = context.Deserialize<InterfaceDescriptor[]>(ref reader),
         };
@@ -36,7 +33,6 @@ internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeRe
     {
         context.Serialize(MessageType.HandshakeResponse, writer);
         context.Serialize(ErrorCode, writer);
-        context.Serialize(IsLittleEndian, writer);
         context.Serialize(ChosenCompression, writer);
         context.Serialize(Interfaces, writer);
     }
