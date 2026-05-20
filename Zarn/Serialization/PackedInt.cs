@@ -61,6 +61,15 @@ internal static class PackedInt
         return bytes;
     }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="span"></param>
+    /// <param name="value"></param>
+    /// <param name="consumed">Contains amount of bytes consumed when method returns <see langword="true"/>,
+    /// otherwise returns amount of bytes required</param>
+    /// <returns></returns>
+    /// <exception cref="InvalidDataException"></exception>
     public static bool TryRead(ReadOnlySpan<byte> span, out long value, out int consumed)
     {
         Unsafe.SkipInit(out value);
@@ -99,6 +108,7 @@ internal static class PackedInt
             case 16:
                 if (span.Length < 9)
                 {
+                    consumed = 9;
                     return false;
                 }
                 value = BinaryPrimitives.ReadInt64BigEndian(span[1..]);
