@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Benchmarks.Base/Benchmarks.Base.csproj" />
+  <Project Path="Benchmarks.Client/Benchmarks.Client.csproj" />
+  <Project Path="Benchmarks.Server/Benchmarks.Server.csproj" />
+  <Project Path="Zarn.AspNetCore/Zarn.AspNetCore.csproj" />
+  <Project Path="Zarn.Tests/Zarn.Tests.csproj" />
+  <Project Path="Zarn/Zarn.csproj" />
+</Solution>
