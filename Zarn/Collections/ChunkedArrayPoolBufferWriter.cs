@@ -154,7 +154,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
         }
         LastChunk = newChunk;
 
-        return currentChunk;
+        return newChunk;
     }
 
     public Enumerator GetEnumerator() => new(this);
