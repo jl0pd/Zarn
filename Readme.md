@@ -3,6 +3,8 @@
 Zarn stands for **Z**ero **A**llocation **R**pc for dot**N**et.
 It's a library for seamless communication with remote process over arbitrary `System.IO.Stream`.
 
+![Version](https://img.shields.io/nuget/v/:zarn)
+
 ## Features
 
 * **Amortized zero allocations**:
