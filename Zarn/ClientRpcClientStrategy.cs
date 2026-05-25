@@ -62,10 +62,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             ProtocolVersionMinor = 0,
             SupportedCompressions = _settings.CompressionProviders.Select(x => x.AlgorithmName).ToArray(),
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
-            Interfaces = Services
-                            .GetRequiredService<AllowedRemoteConnections>()
-                            .Select(InterfaceDescriptor.FromType)
-                            .ToArray(),
+            Interfaces = InterfaceDescriptor.CollectDescriptors(Services.GetRequiredService<AllowedRemoteConnections>()),
         };
         message.Reserve(PackedInt.MaxSize);
         request.Serialize(message, _serializationContext);
@@ -90,7 +87,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
         var compressionProvider = GetCompression(response.ChosenCompression);
 
-        var pools = new Pools(_pools, request.Interfaces, response.Interfaces, compressionProvider);
+        var pools = new Pools(_pools, response.Interfaces, request.Interfaces, compressionProvider);
         return new ConnectionContext(false, stream, pools, _settings, Services);
     }
 

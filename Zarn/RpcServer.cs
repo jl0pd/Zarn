@@ -67,11 +67,7 @@ public sealed class RpcServer : IAsyncDisposable
 
         _services = _serviceDescriptors.BuildServiceProvider();
 
-        var interfaceDescriptors = _services
-                                    .GetRequiredService<AllowedRemoteConnections>()
-                                    .Select(InterfaceDescriptor.FromType)
-                                    .ToArray();
-
+        var interfaceDescriptors = InterfaceDescriptor.CollectDescriptors(_services.GetRequiredService<AllowedRemoteConnections>());
         var pools = new Pools(new BinarySerializationContext(_settings));
 
         using var actualCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);

@@ -88,4 +88,61 @@ internal sealed record InterfaceDescriptor(SignatureType.Named Name, MethodSigna
         context.Serialize(Name, writer);
         context.Serialize(Methods, writer);
     }
+
+    public static HashSet<Type> CollectInterfaces(IEnumerable<Type> types)
+    {
+        var result = new HashSet<Type>();
+        var queue = new Queue<Type>(types);
+
+        while (queue.TryDequeue(out var type))
+        {
+            if (!type.IsInterface)
+            {
+                // handled in services.AllowRemoteConnection<T>();
+                throw ThrowHelper.Unreachable;
+            }
+
+            if (!result.Add(type))
+            {
+                continue;
+            }
+
+            foreach (var method in type.GetMethods())
+            {
+                foreach (var param in method.GetParameters())
+                {
+                    if (param.ParameterType.IsInterface)
+                    {
+                        queue.Enqueue(param.ParameterType);
+                    }
+                }
+
+                var retType = method.ReturnType;
+                if (retType.IsInterface)
+                {
+                    queue.Enqueue(retType);
+                }
+
+                if (retType.IsConstructedGenericType)
+                {
+                    var genDef = retType.GetGenericTypeDefinition();
+                    if (genDef == typeof(Task<>) || genDef == typeof(ValueTask<>))
+                    {
+                        var genArg = retType.GetGenericArguments()[0];
+                        if (genArg.IsInterface)
+                        {
+                            queue.Enqueue(genArg);
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public static InterfaceDescriptor[] CollectDescriptors(IEnumerable<Type> types)
+    {
+        return CollectInterfaces(types).Select(FromType).ToArray();
+    }
 }
