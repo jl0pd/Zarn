@@ -29,7 +29,6 @@ internal static class ThrowHelper
         throw new InvalidDataException();
     }
 
-    [DoesNotReturn]
     [DebuggerNonUserCode]
     [ExcludeFromCodeCoverage]
     public static Exception Fail(string message)
