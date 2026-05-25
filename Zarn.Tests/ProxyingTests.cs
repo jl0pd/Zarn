@@ -94,4 +94,12 @@ public sealed class ProxyingTests : RpcTestsBase
 
         Assert.NotEqual(-1, result);
     });
+
+    [Fact]
+    public Task CallToReturnedInterface() => RunConnectToServerTest<IGreeterFactory, GreeterFactory>(async (inst) =>
+    {
+        var greeter = await inst.GetGreeter();
+        var result = await greeter.GetGreetingValueAsync("World");
+        Assert.Equal("Hello, World", result);
+    });
 }

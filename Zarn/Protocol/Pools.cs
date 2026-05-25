@@ -18,24 +18,33 @@ internal sealed class Pools
         SerializationContext = serializationContext;
 
         CalleeFactories = [];
-        ReverseCalleeFactories = [];
-
         InvokerFactories = [];
-        ReverseInvokerFactories = [];
     }
 
     public Pools(Pools pools,
-                 InterfaceDescriptor[] calleeDescriptors,
-                 InterfaceDescriptor[] invokerDescriptors,
+                 InterfaceDescriptor[] serverDescriptors,
+                 InterfaceDescriptor[] clientDescriptors,
                  CompressionProvider? compressionProvider)
     {
-        var allCalleeDescriptors = GetAllInterfaces(calleeDescriptors);
-        CalleeFactories = allCalleeDescriptors.Select(x => new CalleeFactory(x)).ToArray();
-        ReverseCalleeFactories = allCalleeDescriptors.Select(x => new InvokerFactory(x)).ToArray();
+        CalleeFactories = new CalleeFactory[serverDescriptors.Length + clientDescriptors.Length];
+        for (int i = 0; i < serverDescriptors.Length; i++)
+        {
+            CalleeFactories[i] = new CalleeFactory(serverDescriptors[i]);
+        }
+        for (int i = 0; i < clientDescriptors.Length; i++)
+        {
+            CalleeFactories[serverDescriptors.Length + i] = new CalleeFactory(clientDescriptors[i]);
+        }
 
-        var allInvokerDescriptors = GetAllInterfaces(invokerDescriptors);
-        InvokerFactories = allInvokerDescriptors.Select(x => new InvokerFactory(x)).ToArray();
-        ReverseInvokerFactories = allInvokerDescriptors.Select(x => new CalleeFactory(x)).ToArray();
+        InvokerFactories = new InvokerFactory[serverDescriptors.Length + clientDescriptors.Length];
+        for (int i = 0; i < serverDescriptors.Length; i++)
+        {
+            InvokerFactories[i] = new InvokerFactory(serverDescriptors[i]);
+        }
+        for (int i = 0; i < clientDescriptors.Length; i++)
+        {
+            InvokerFactories[serverDescriptors.Length + i] = new InvokerFactory(clientDescriptors[i]);
+        }
 
         SerializationContext = pools.SerializationContext;
         _onCompletedCache = pools._onCompletedCache;
@@ -51,10 +60,8 @@ internal sealed class Pools
     }
 
     public CalleeFactory[] CalleeFactories { get; }
-    public InvokerFactory[] ReverseCalleeFactories { get; }
 
     public InvokerFactory[] InvokerFactories { get; }
-    public CalleeFactory[] ReverseInvokerFactories { get; }
 
     public CompressionProvider? CompressionProvider { get; }
 
@@ -225,38 +232,5 @@ internal sealed class Pools
     {
         Debug.Assert(_decompressorPool is { });
         _decompressorPool.Return(decompressor);
-    }
-
-    private static List<InterfaceDescriptor> GetAllInterfaces(InterfaceDescriptor[] descriptors)
-    {
-        var result = new List<InterfaceDescriptor>();
-        var seen = new HashSet<Type>();
-
-        var queue = new Queue<InterfaceDescriptor>(descriptors);
-
-        while (queue.TryDequeue(out var descriptor))
-        {
-            var type = descriptor.ResolveType();
-            if (type is { } && seen.Add(type))
-            {
-                result.Add(descriptor);
-                foreach (var method in descriptor.ResolveMethods())
-                {
-                    if (method is { })
-                    {
-                        var parameters = method.GetParameters();
-                        foreach (var param in parameters)
-                        {
-                            if (param.ParameterType.IsInterface)
-                            {
-                                queue.Enqueue(InterfaceDescriptor.FromType(param.ParameterType));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return result;
     }
 }

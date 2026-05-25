@@ -46,7 +46,7 @@ internal sealed class InstanceManager(ConnectionContext connection, IServiceProv
                                 ? invokerType.GetGenericTypeDefinition()
                                 : invokerType;
 
-        var factories = finalizable ? _pools.ReverseCalleeFactories : _pools.InvokerFactories;
+        var factories = _pools.InvokerFactories;
         for (int i = 0; i < factories.Length; i++)
         {
             if (factories[i].InterfaceType == interfaceType)
@@ -114,7 +114,7 @@ internal sealed class InstanceManager(ConnectionContext connection, IServiceProv
             var genArgs = calleeType.GetGenericArguments();
             var genDef = calleeType.GetGenericTypeDefinition();
 
-            foreach (var factory in _pools.ReverseInvokerFactories)
+            foreach (var factory in _pools.CalleeFactories)
             {
                 if (factory.TryGetFactory(genDef, genArgs) is { } f)
                 {
@@ -124,7 +124,7 @@ internal sealed class InstanceManager(ConnectionContext connection, IServiceProv
         }
         else
         {
-            foreach (var factory in _pools.ReverseInvokerFactories)
+            foreach (var factory in _pools.CalleeFactories)
             {
                 if (factory.TryGetFactory(calleeType) is { } f)
                 {
