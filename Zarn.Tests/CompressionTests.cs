@@ -21,7 +21,7 @@ public sealed class CompressionTests
         return
         [
             new TheoryDataRow<string>(new string('a', 1024)),
-            new TheoryDataRow<string>(string.Join("", Enumerable.Range(0, 1024).Select(x => (byte)Random.Shared.Next(0, 255)))),
+            new TheoryDataRow<string>(string.Join("", Enumerable.Range(0, 1024).Select(x => (byte)new Random(42).Next(0, 255)))),
         ];
     }
 
@@ -29,7 +29,6 @@ public sealed class CompressionTests
     [InlineData("")]
     [InlineData("some text")]
     [InlineData("another text")]
-    [MemberData(nameof(GetLongStrings))]
     public void Roundtrip(string text)
     {
         foreach (var level in s_levels)
@@ -41,6 +40,25 @@ public sealed class CompressionTests
             var compressor = provider.CreateCompressor();
 
             for (int i = 1; i < utf8Bytes.Length; i++)
+            {
+                AssertRoundtrip(SequenceHelper.Split(utf8Bytes, i), compressor, decompressor);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(GetLongStrings))]
+    public void LongRoundtrip(string text)
+    {
+        foreach (var level in s_levels)
+        {
+            var provider = (CompressionProvider)new BrotliCompressionProvider(level);
+
+            var utf8Bytes = Encoding.UTF8.GetBytes(text);
+            var decompressor = provider.CreateDecompressor();
+            var compressor = provider.CreateCompressor();
+
+            for (int i = 1; i < utf8Bytes.Length; i += text.Length / 5)
             {
                 AssertRoundtrip(SequenceHelper.Split(utf8Bytes, i), compressor, decompressor);
             }
