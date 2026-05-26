@@ -8,6 +8,9 @@ on:
 
 jobs:
   build:
+    # there's no much tests for now. Most of the time job runs in less than 1 minute
+    timeout-minutes: 5
+
     runs-on: ubuntu-latest
 
     steps:
