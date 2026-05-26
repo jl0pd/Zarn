@@ -4,23 +4,25 @@ using Zarn.Serialization;
 
 namespace Zarn.Protocol.Messages;
 
-internal sealed class HandshakeRequestMessage : IBinarySerializable<HandshakeRequestMessage>
+internal readonly struct HandshakeRequestMessage : IMessageInternal<HandshakeRequestMessage>
 {
+    public MessageType Type => MessageType.HandshakeRequest;
+
     /// <summary>
     /// Major version of protocol. Must match on client and server
     /// </summary>
-    public required int ProtocolVersionMajor { get; set; }
+    public required int ProtocolVersionMajor { get; init; }
 
     /// <summary>
     /// Minor version of protocol. May mismatch if <see cref="AllowMinorVersionMismatch"/> is set.
     /// </summary>
-    public required int ProtocolVersionMinor { get; set; }
+    public required int ProtocolVersionMinor { get; init; }
 
-    public required bool AllowMinorVersionMismatch { get; set; }
+    public required bool AllowMinorVersionMismatch { get; init; }
 
-    public required string[] SupportedCompressions { get; set; } = [];
+    public required string[] SupportedCompressions { get; init; }
 
-    public required InterfaceDescriptor[] Interfaces { get; set; } = [];
+    public required InterfaceDescriptor[] Interfaces { get; init; }
 
     public static HandshakeRequestMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {

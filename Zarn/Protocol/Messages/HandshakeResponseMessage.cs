@@ -4,15 +4,17 @@ using Zarn.Serialization;
 
 namespace Zarn.Protocol.Messages;
 
-internal sealed class HandshakeResponseMessage : IBinarySerializable<HandshakeResponseMessage>
+internal readonly struct HandshakeResponseMessage : IMessageInternal<HandshakeResponseMessage>
 {
+    public MessageType Type => MessageType.HandshakeResponse;
+
     public bool IsSuccess => ErrorCode == ErrorCode.Ok;
 
-    public required ErrorCode ErrorCode { get; set; }
+    public required ErrorCode ErrorCode { get; init; }
 
-    public required string? ChosenCompression { get; set; }
+    public required string? ChosenCompression { get; init; }
 
-    public required InterfaceDescriptor[] Interfaces { get; set; } = [];
+    public required InterfaceDescriptor[] Interfaces { get; init; }
 
     public static HandshakeResponseMessage Deserialize(ref SequenceReader<byte> reader, BinarySerializationContext context)
     {
