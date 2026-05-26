@@ -41,22 +41,27 @@ public sealed class BrotliDecompressor : IDecompressor
     {
         while (!source.IsEmpty)
         {
-            var dstSpan = destination.GetSpan(source.Length);
-            var status = decoder.Decompress(source, dstSpan, out int consumed, out int written);
-            if (status == OperationStatus.InvalidData)
+            OperationStatus status;
+            int written;
+            do
             {
-                ThrowHelper.ThrowInvalidData();
-            }
+                var dstSpan = destination.GetSpan(source.Length);
+                status = decoder.Decompress(source, dstSpan, out int consumed, out written);
+                if (status == OperationStatus.InvalidData)
+                {
+                    ThrowHelper.ThrowInvalidData();
+                }
 
-            if (consumed > 0)
-            {
-                source = source[consumed..];
-            }
+                if (consumed > 0)
+                {
+                    source = source[consumed..];
+                }
 
-            if (written > 0)
-            {
-                destination.Advance(written);
-            }
+                if (written > 0)
+                {
+                    destination.Advance(written);
+                }
+            } while (status == OperationStatus.DestinationTooSmall && written > 0);
         }
     }
 
