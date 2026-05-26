@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
-using Zarn.Collections;
 using Zarn.Compression;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
@@ -54,7 +53,7 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
     {
         Services = _serviceCollection.BuildServiceProvider();
 
-        var message = _pools.GetWriter();
+        var buffer = _pools.GetWriter();
 
         var request = new HandshakeRequestMessage
         {
@@ -64,21 +63,18 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
             Interfaces = InterfaceDescriptor.CollectDescriptors(Services.GetRequiredService<AllowedRemoteConnections>()),
         };
-        message.Reserve(PackedInt.MaxSize);
-        request.Serialize(message, _serializationContext);
 
-        await StreamHelper.Send(stream, message, cancellationToken);
+        await StreamHelper.Send(stream, request, buffer, _serializationContext, cancellationToken);
 
-        message.Reset();
+        buffer.Reset();
         var initialBuffer = new byte[PackedInt.MaxSize];
-        if (!await StreamHelper.Read(stream, initialBuffer, message, cancellationToken))
+        if (!await StreamHelper.Read(stream, initialBuffer, buffer, cancellationToken))
         {
             throw new EndOfStreamException("Could not read handshake message from stream");
         }
 
-        var reader = message.GetReader();
-        var response = HandshakeResponseMessage.Deserialize(ref reader, _serializationContext);
-        _pools.Return(message);
+        var response = IMessageInternal<HandshakeResponseMessage>.Deserialize(buffer, _serializationContext);
+        _pools.Return(buffer);
 
         if (response.ErrorCode != ErrorCode.Ok)
         {

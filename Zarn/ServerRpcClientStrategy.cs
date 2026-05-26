@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Zarn.Collections;
 using Zarn.Compression;
@@ -39,15 +40,13 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
     public async ValueTask<ConnectionContext> ConnectAsync(CancellationToken cancellationToken)
     {
         var initialBuffer = new byte[PackedInt.MaxSize];
-        var message = pools.GetWriter();
-        if (!await StreamHelper.Read(stream, initialBuffer, message, cancellationToken))
+        var buffer = pools.GetWriter();
+        if (!await StreamHelper.Read(stream, initialBuffer, buffer, cancellationToken))
         {
             throw new EndOfStreamException("Could not read handshake request from client");
         }
-
-        var reader = message.GetReader();
-        var request = HandshakeRequestMessage.Deserialize(ref reader, pools.SerializationContext);
-        message.Reset();
+        var request = IMessageInternal<HandshakeRequestMessage>.Deserialize(buffer, pools.SerializationContext);
+        buffer.Reset();
 
         ErrorCode errorCode;
         if (request.ProtocolVersionMajor != 1)
@@ -71,11 +70,8 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
             ErrorCode = errorCode,
         };
 
-        message.Reserve(PackedInt.MaxSize);
-        response.Serialize(message, pools.SerializationContext);
-
-        await StreamHelper.Send(stream, message, cancellationToken);
-        pools.Return(message);
+        await StreamHelper.Send(stream, response, buffer, pools.SerializationContext, cancellationToken);
+        pools.Return(buffer);
 
         if (!response.IsSuccess)
         {

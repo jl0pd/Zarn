@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 
 namespace Zarn.Serialization.Serializers.Core;
 
@@ -36,6 +37,8 @@ internal sealed class BinarySerializableFactory : BinarySerializerFactory
         throw ThrowHelper.Unreachable;
     }
 
+    [DebuggerNonUserCode]
+    [DebuggerStepThrough]
     private sealed class Serializer<T> : BinarySerializer<T> where T : IBinarySerializable<T>
     {
         public override T Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
