@@ -1,4 +1,5 @@
 using Zarn.Collections;
+using Zarn.Protocol.Messages;
 using Zarn.Serialization;
 
 namespace Zarn.Protocol;
@@ -15,14 +16,21 @@ internal static class StreamHelper
         return chunk.Array.AsMemory(chunk.Start - requiredSize, chunk.Written + requiredSize);
     }
 
-    public static async ValueTask Send(Stream stream,
-                                       ChunkedArrayPoolBufferWriter<byte> message,
-                                       CancellationToken cancellationToken)
+    public static async ValueTask Send<T>(Stream stream,
+                                          T message,
+                                          ChunkedArrayPoolBufferWriter<byte> buffer,
+                                          BinarySerializationContext serializationContext,
+                                          CancellationToken cancellationToken)
+        where T : struct, IMessageInternal<T>
     {
-        foreach (var chunk in message)
+        buffer.Reserve(PackedInt.MaxSize);
+
+        message.Serialize(buffer, serializationContext);
+
+        foreach (var chunk in buffer)
         {
             var memoryToWrite = chunk.ChunkIndex == 0
-                                ? PrepareFirstChunk(message.TotalLength, chunk)
+                                ? PrepareFirstChunk(buffer.TotalLength, chunk)
                                 : chunk.WrittenMemory;
             await stream.WriteAsync(memoryToWrite, cancellationToken);
         }

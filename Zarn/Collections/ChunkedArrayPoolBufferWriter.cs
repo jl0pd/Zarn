@@ -177,12 +177,14 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
             if (_current is null)
             {
                 _current = writer.FirstChunk;
+                return _current is { };
             }
             else if (_current.Next is null)
             {
                 return false;
             }
 
+            _current = _current.Next;
             return _current is { };
         }
 
