@@ -89,6 +89,7 @@ internal sealed class ChunkedArrayPoolBufferWriter<T>(int minAllocationSize, int
             chunk.Array = [];
             chunk.Written = 0;
             chunk.Start = 0;
+            chunk.SetMemory();
         }
 
         LastChunk = null;
