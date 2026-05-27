@@ -44,6 +44,8 @@ public sealed class BinarySerializationContext
         SmallArray4BinarySerializerFactory.Instance,
     ];
 
+    private readonly List<BinarySerializer> _typedSerializers = [];
+
     internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()
     {
         { typeof(Exception), ExceptionBinarySerializer.Instance },
@@ -103,13 +105,7 @@ public sealed class BinarySerializationContext
             }
             else
             {
-                var serializerType = serializer.GetType();
-                Debug.Assert(serializerType.IsConstructedGenericType &&
-                             serializerType.GetGenericTypeDefinition() == typeof(BinarySerializer<>),
-                             "Only factory & generic serializers are implementable");
-
-                var valueType = serializerType.GetGenericArguments()[0];
-                _instances.Add(valueType, serializer);
+                _typedSerializers.Add(serializer);
             }
         }
 
@@ -142,7 +138,8 @@ public sealed class BinarySerializationContext
 
     private BinarySerializer GetSerializerSlow(Type type)
     {
-        if ((GetSerializerFromFactory(type) ??
+        if ((GetSerializerFromTyped(type) ??
+             GetSerializerFromFactory(type) ??
              GetSerializerFromInstance(type) ??
              GetSerializerFromAttribute(type)) is { } ser)
         {
@@ -192,6 +189,20 @@ public sealed class BinarySerializationContext
     private BinarySerializer? GetSerializerFromInstance(Type type)
     {
         foreach (var (_, inst) in _instances)
+        {
+            if (inst.CanConvert(type))
+            {
+                _instances[type] = inst;
+                return inst;
+            }
+        }
+
+        return null;
+    }
+
+    private BinarySerializer? GetSerializerFromTyped(Type type)
+    {
+        foreach (var inst in _typedSerializers)
         {
             if (inst.CanConvert(type))
             {
