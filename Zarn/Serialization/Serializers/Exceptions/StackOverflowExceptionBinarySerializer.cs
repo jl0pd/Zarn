@@ -7,6 +7,8 @@ internal sealed class StackOverflowExceptionBinarySerializer : ExceptionSerializ
 {
     public static StackOverflowExceptionBinarySerializer Instance { get; } = new();
 
+    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types",
+            Justification = "Someone can raise this exception and we must handle it")]
     protected override StackOverflowException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new StackOverflowException(message, innerException);

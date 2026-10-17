@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 using Zarn.Serialization;
 
 namespace Zarn.Protocol.Messages;

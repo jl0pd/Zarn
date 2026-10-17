@@ -8,15 +8,4 @@ internal static class ThreadingHelper
     {
         return Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     }
-
-    public static async void Fire(this Task task)
-    {
-        try
-        {
-            await task;
-        }
-        catch
-        {
-        }
-    }
 }

@@ -4,6 +4,8 @@ using Zarn.Serialization;
 
 namespace Zarn.Tests.Serialization;
 
+[SuppressMessage("Design", "CA1024:Use properties where appropriate", 
+    Justification = "Methods for MemberData")]
 public sealed class BinarySerializationTests
 {
     [Theory]

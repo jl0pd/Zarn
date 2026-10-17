@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Zarn.Collections;
 using Zarn.EnumerableSupport;
@@ -57,9 +56,12 @@ internal sealed class ConnectionContext : IAsyncDisposable
         return _stream.DisposeAsync();
     }
 
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
+            Justification = "Method is called from method without sync ctx")]
     public async Task SendMessages(CancellationToken cancellationToken)
     {
         Debug.Assert(cancellationToken.CanBeCanceled);
+        Debug.Assert(SynchronizationContext.Current is null);
 
         using var _ = cancellationToken.UnsafeRegister(
                         static state => ((AsyncAutoResetEvent?)state)?.Set(),
@@ -152,8 +154,15 @@ internal sealed class ConnectionContext : IAsyncDisposable
         }
     }
 
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
+            Justification = "Method is called from method without sync ctx")]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "ignore exception that may be raised when reading from stream, " +
+                            "because there's no way to stop pending read in non-destructive way")]
     public async Task ReadMessages(CancellationToken cancellationToken)
     {
+        Debug.Assert(SynchronizationContext.Current is null);
+
         var initialBuffer = new byte[PackedInt.MaxSize];
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -166,8 +175,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
             }
             catch
             {
-                // ignore exception that may be raised when reading from stream
-                // because there's no way to stop pending read in non-destructive way
+                // see justification for CA1031
                 bytesRead = 0;
             }
             if (bytesRead == 0)

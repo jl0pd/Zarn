@@ -4,6 +4,16 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <NoWarn>
+      $(NoWarn);
+      CA2007; <!-- configreAwait(false) --> <!-- asp.net doesn't have sync ctx and don't need it -->
+      CA1515; <!-- make type internal -->
+      CA1062; <!-- check null args -->
+      CA1050; <!-- declare types in namespaces -->
+    </NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Grpc.Net.Client" />

@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Text;
 
 namespace Zarn.Serialization.Serializers.Core;
@@ -39,7 +38,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
         {
             PackedIntBinarySerializer.Instance.Serialize(-1, writer, context);
         }
-        else if (value == "")
+        else if (value.Length == 0)
         {
             PackedIntBinarySerializer.Instance.Serialize(0, writer, context);
         }

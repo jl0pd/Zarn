@@ -5,6 +5,8 @@ namespace Zarn.Tests;
 public sealed class SimpleRpcCallTests : RpcTestsBase
 {
     [Fact]
+    [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
+            Justification = "Sync method is used for testing")]
     public Task SyncId() => RunConnectToServerTest<IIdentityFunctions, IdentityFunctions>(async (inst) =>
     {
         var value = Guid.NewGuid().ToString();
@@ -26,6 +28,8 @@ public sealed class SimpleRpcCallTests : RpcTestsBase
     });
 
     [Fact]
+    [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
+            Justification = "Sync method is used for testing")]
     public Task SyncIgnore() => RunConnectToServerTest<IIgnoreFunctions, IgnoreFunctions>(async (inst) =>
     {
         var value = Guid.NewGuid().ToString();
@@ -64,6 +68,8 @@ public sealed class SimpleRpcCallTests : RpcTestsBase
     });
 
     [Fact]
+    [SuppressMessage("Performance", "CA1849:Call async methods when in an async method",
+            Justification = "Sync method is used for testing")]
     public Task SyncReturn() => RunConnectToServerTest<IGreeter, Greeter>(async (inst) =>
     {
         Assert.Equal("Hello, John", inst.GetGreeting("John"));

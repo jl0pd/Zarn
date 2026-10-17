@@ -9,6 +9,8 @@ public static class HttpContextExtensions
 {
     public static Task EnableStreaming(this HttpContext context, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         // copied from https://github.com/davidfowl/StreamingSample/blob/020357917831f1e74432277b0a95be4e11050ddb/server/Startup.cs#L21
 
         // We're streaming here so there's no max body size nor is there a min data rate
@@ -23,7 +25,7 @@ public static class HttpContextExtensions
     {
         var streamProvider = AspNetRpcStreamProvider.FromHttpContext(context);
         var settings = context.RequestServices.GetService<RpcSettings>();
-        var server = new RpcServer(streamProvider, settings);
+        await using var server = new RpcServer(streamProvider, settings);
         server.ConfigureServices(configureServices);
 
         var client = await server.AcceptSingleClient(context.RequestAborted);

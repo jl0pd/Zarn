@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Zarn.Tests.TestTypes;
 
@@ -24,7 +23,7 @@ public sealed class ExceptionPropagationTests : RpcTestsBase
         {
             Assert.Equal(localEx.Message, e.Message);
             Assert.Null(e.InnerException);
-            Assert.Contains("at Zarn.Tests.TestTypes.Thrower.Throw", e.StackTrace);
+            Assert.Contains("at Zarn.Tests.TestTypes.Thrower.Throw", e.StackTrace, StringComparison.Ordinal);
             assert(e);
         }
     }
@@ -51,11 +50,13 @@ public sealed class ExceptionPropagationTests : RpcTestsBase
     }
 
     [Fact]
-    public Task Ex()
+    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types")]
+    public Task SystemException()
         => SimpleTest(() => new Exception());
 
     [Fact]
-    public Task ExWithMessage()
+    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types")]
+    public Task SystemExceptionWithMessage()
         => SimpleTest(() => new Exception("some message"));
 
     [Fact]

@@ -2,11 +2,12 @@ using System.Buffers;
 
 namespace Zarn.Serialization.Serializers.Exceptions;
 
-// this exception cannot be handled if thrown by runtime, but someone could throw this in own interpreter
 internal sealed class AccessViolationExceptionBinarySerializer : ExceptionSerializerBase<AccessViolationException>
 {
     public static AccessViolationExceptionBinarySerializer Instance { get; } = new();
 
+    [SuppressMessage("Usage", "CA2201:Do not raise reserved exception types",
+            Justification = "This exception can be thrown by user code and therefore should be handled")]
     protected override AccessViolationException DeserializeCore(string message, Exception? innerException, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         return new AccessViolationException(message, innerException);

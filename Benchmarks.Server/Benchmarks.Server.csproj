@@ -8,6 +8,17 @@
     <Protobuf Include="Protos\calculator.proto" GrpcServices="Server" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <NoWarn>
+      $(NoWarn);
+      CA2007; <!-- configreAwait(false) --> <!-- asp.net doesn't have sync ctx and don't need it -->
+      CA1515; <!-- make type internal -->
+      CA1062; <!-- check null args -->
+      CA1848; <!-- use optimized logging -->
+      CA1873; <!-- use optimized logging -->
+    </NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Grpc.Net.Client" />

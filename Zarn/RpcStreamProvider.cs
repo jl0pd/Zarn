@@ -8,7 +8,16 @@ public abstract class RpcStreamProvider : IAsyncDisposable
 {
     public abstract ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken);
 
-    public virtual ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        return DisposeAsyncCore();
+    }
+
+    protected virtual ValueTask DisposeAsyncCore()
+    {
+        return ValueTask.CompletedTask;
+    }
 
     public static RpcStreamProvider FromStream(Stream stream)
         => new Singleton(stream ?? throw new ArgumentNullException(nameof(stream)));
@@ -20,10 +29,21 @@ public abstract class RpcStreamProvider : IAsyncDisposable
         => new ListenPort(endpoint);
 
     public static RpcStreamProvider FromHttp2Endpoint(HttpClient httpClient, Uri address)
-        => new Http2Endpoint(httpClient, address, _ => { });
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(address);
+
+        return new Http2Endpoint(httpClient, address, _ => { });
+    }
 
     public static RpcStreamProvider FromHttp2Endpoint(HttpClient httpClient, Uri address, Action<HttpRequestMessage> configureMessage)
-        => new Http2Endpoint(httpClient, address, configureMessage);
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(configureMessage);
+
+        return new Http2Endpoint(httpClient, address, configureMessage);
+    }
 
     private sealed class Singleton(Stream? stream) : RpcStreamProvider
     {
@@ -40,21 +60,25 @@ public abstract class RpcStreamProvider : IAsyncDisposable
 
     private sealed class ClientTcp(IPEndPoint? endpoint) : RpcStreamProvider
     {
+        [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+                Justification = "it's disposed in case of fail, otherwise ownership is passed to NetworkStream")]
         public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
             if (Interlocked.Exchange(ref endpoint, null) is { } ep)
             {
                 var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                
                 try
                 {
-                    await socket.ConnectAsync(ep, cancellationToken);
-                    return new NetworkStream(socket, true);
+                    await socket.ConnectAsync(ep, cancellationToken).ConfigureAwait(false);
                 }
                 catch
                 {
                     socket.Dispose();
                     throw;
                 }
+
+                return new NetworkStream(socket, true);
             }
 
             return null;
@@ -63,7 +87,10 @@ public abstract class RpcStreamProvider : IAsyncDisposable
 
     private sealed class ListenPort(IPEndPoint endpoint) : RpcStreamProvider
     {
+        [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", 
+                Justification = "Disposed in thread-safe way")]
         private TcpListener? _listener = new(endpoint);
+
         private bool _isStarted;
 
         public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
@@ -77,14 +104,15 @@ public abstract class RpcStreamProvider : IAsyncDisposable
                 _isStarted = true;
             }
 
-            var socket = await listener.AcceptSocketAsync(cancellationToken);
+            var socket = await listener.AcceptSocketAsync(cancellationToken).ConfigureAwait(false);
             return new NetworkStream(socket, true);
         }
 
-        public override ValueTask DisposeAsync()
+        protected override async ValueTask DisposeAsyncCore()
         {
+            await base.DisposeAsyncCore().ConfigureAwait(false);
+
             Interlocked.Exchange(ref _listener, null)?.Dispose();
-            return ValueTask.CompletedTask;
         }
     }
 
@@ -96,7 +124,7 @@ public abstract class RpcStreamProvider : IAsyncDisposable
         {
             var outputStreamTcs = new TaskCompletionSource<(Stream, CancellationToken)>();
             var endCommunicationTcs = new TaskCompletionSource();
-            var request = new HttpRequestMessage
+            using var request = new HttpRequestMessage
             {
                 Version = s_v20,
                 VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
@@ -106,18 +134,18 @@ public abstract class RpcStreamProvider : IAsyncDisposable
                 Content = new PostStreamContent(async (stream, ct) =>
                 {
                     // flush stream even though it's empty to avoid deadlock
-                    await stream.FlushAsync();
+                    await stream.FlushAsync(ct).ConfigureAwait(false);
                     outputStreamTcs.SetResult((stream, ct));
-                    await endCommunicationTcs.Task;
+                    await endCommunicationTcs.Task.ConfigureAwait(false);
                 }),
             };
 
             configureMessage(request);
 
-            var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            var inputStream = await response.Content.ReadAsStreamAsync(CancellationToken.None);
-            var (outputStream, outputCt) = await outputStreamTcs.Task;
+            var inputStream = await response.Content.ReadAsStreamAsync(CancellationToken.None).ConfigureAwait(false);
+            var (outputStream, outputCt) = await outputStreamTcs.Task.ConfigureAwait(false);
             return new CombinedStream(inputStream, new UnclosableStream(outputStream), endCommunicationTcs);
         }
 

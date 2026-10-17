@@ -23,4 +23,6 @@ internal sealed class CompiledCalleeFactory : ICalleeFactory
     public CalleeBase Get() => _cache.Get();
 
     public void Return(CalleeBase callee) => _cache.Return(callee);
+ 
+    public void Dispose() => _cache.Dispose();
 }

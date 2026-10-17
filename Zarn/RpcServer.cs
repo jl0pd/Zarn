@@ -2,16 +2,24 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Zarn.Protocol;
 using Zarn.Serialization;
+using Zarn.Utils;
 
 namespace Zarn;
 
 public sealed class RpcServer : IAsyncDisposable
 {
     private readonly RpcStreamProvider _streamProvider;
+
     private readonly RpcSettings _settings;
+
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "Thread-safe disposal")]
     private CancellationTokenSource? _cts = new();
+
     private readonly CancellationToken _cancellationToken;
+
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "Thread-safe disposal")]
     private ServiceProvider? _services;
+
     private readonly ServiceCollection _serviceDescriptors = [];
 
     public RpcServer(RpcStreamProvider streamProvider, RpcSettings? settings = null)
@@ -22,10 +30,13 @@ public sealed class RpcServer : IAsyncDisposable
         _cancellationToken = _cts.Token;
 
         _serviceDescriptors.AddSingleton(new AllowedRemoteConnections());
+        _serviceDescriptors.AddSingleton(sp => new Pools(new BinarySerializationContext(_settings)));
     }
 
     public void ConfigureServices(Action<IServiceCollection> configure)
     {
+        ArgumentNullException.ThrowIfNull(configure);
+
         configure(_serviceDescriptors);
     }
 
@@ -41,9 +52,9 @@ public sealed class RpcServer : IAsyncDisposable
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await foreach (var client in Start(cancellationToken))
+        await foreach (var client in Start(cancellationToken).ConfigureAwait(false))
         {
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(false);
             return client;
         }
 
@@ -56,6 +67,10 @@ public sealed class RpcServer : IAsyncDisposable
     /// <param name="cancellationToken"></param>
     /// <returns>Lazy collection that begins accepting new client when next element is requested.</returns>
     /// <exception cref="InvalidOperationException">Method was called more than once</exception>
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
+            Justification = "LeaveContext is called")]
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "ServerRpcClientStrategy ownership is passed to RpcClient")]
     public async IAsyncEnumerable<RpcClient> Start([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_services is { })
@@ -65,10 +80,12 @@ public sealed class RpcServer : IAsyncDisposable
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        await ThreadingHelper.LeaveContext();
+
         _services = _serviceDescriptors.BuildServiceProvider();
 
         var interfaceDescriptors = InterfaceDescriptor.CollectDescriptors(_services.GetRequiredService<AllowedRemoteConnections>());
-        var pools = new Pools(new BinarySerializationContext(_settings));
+        var pools = _services.GetRequiredService<Pools>();
 
         using var actualCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
         var actualCt = actualCts.Token;
@@ -97,7 +114,7 @@ public sealed class RpcServer : IAsyncDisposable
     {
         if (Interlocked.Exchange(ref _cts, null) is { } cts)
         {
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(false);
             cts.Dispose();
         }
 
@@ -105,7 +122,7 @@ public sealed class RpcServer : IAsyncDisposable
 
         if (Interlocked.Exchange(ref _services, null) is { } sc)
         {
-            await sc.DisposeAsync();
+            await sc.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

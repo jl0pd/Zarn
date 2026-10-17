@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Zarn.Compression;
@@ -34,8 +33,12 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         configure.Invoke(_serviceCollection);
     }
 
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
+            Justification = "LeaveContext is called")]
     public async ValueTask<ConnectionContext> ConnectAsync(CancellationToken cancellationToken)
     {
+        await ThreadingHelper.LeaveContext();
+
         var stream = await _streamProvider.OpenStreamAsync(cancellationToken)
             ?? throw new InvalidOperationException(nameof(RpcStreamProvider) + " has returned null");
         try
@@ -49,6 +52,8 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
         }
     }
 
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
+            Justification = "LeaveContext is called")]
     private async Task<ConnectionContext> ConnectCore(Stream stream, CancellationToken cancellationToken)
     {
         Services = _serviceCollection.BuildServiceProvider();
@@ -108,16 +113,20 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
     public ValueTask DisposeAsync()
     {
-        if (Services is IAsyncDisposable asyncDis)
+        _pools.Dispose();
+
+        var svc = Services;
+        Services = NullServiceProvider.Instance;
+
+        if (svc is IAsyncDisposable asyncDis)
         {
             return asyncDis.DisposeAsync();
         }
-        else if (Services is IDisposable dis)
+        else if (svc is IDisposable dis)
         {
             dis.Dispose();
         }
 
-        Services = NullServiceProvider.Instance;
         return ValueTask.CompletedTask;
     }
 }

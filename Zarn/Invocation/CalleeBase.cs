@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using Zarn.Collections;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
@@ -22,6 +21,8 @@ internal abstract class CalleeBase
 
     internal ICalleeFactory Factory { get; set; } = null!;
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", 
+            Justification = "Exception is dispatched to original caller")]
     public void Dispatch(ref SequenceReader<byte> reader, int methodSlot)
     {
         try
@@ -112,8 +113,8 @@ internal abstract class CalleeBase
     }
 
 
-    internal protected GenericMethodInvokeTrampoline? TryFindTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
-                                                                        ReadOnlySpan<Type> genericArgs)
+    protected internal static GenericMethodInvokeTrampoline? TryFindTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                               ReadOnlySpan<Type> genericArgs)
     {
         var current = head;
         while (current is { })
@@ -129,8 +130,8 @@ internal abstract class CalleeBase
         return null;
     }
 
-    internal protected GenericMethodInvokeTrampoline CreateTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
-                                                                      Type trampolineType)
+    protected internal static GenericMethodInvokeTrampoline CreateTrampoline(ref SingleLinkedListNode<GenericMethodInvokeTrampoline>? head,
+                                                                             Type trampolineType)
     {
         var trampoline = (GenericMethodInvokeTrampoline)Activator.CreateInstance(trampolineType)!;
         var node = new SingleLinkedListNode<GenericMethodInvokeTrampoline>(trampoline);
@@ -216,6 +217,8 @@ internal abstract class CalleeBase
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Exception will be dispatched to original caller")]
     internal void CompleteVoidTask(ValueTask valueTask)
     {
         Debug.Assert(valueTask.IsCompleted);
@@ -232,6 +235,8 @@ internal abstract class CalleeBase
         CompleteVoid();
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Exception will be dispatched to original caller")]
     internal void CompleteTask<T>(ValueTask<T> valueTask)
     {
         Debug.Assert(valueTask.IsCompleted);

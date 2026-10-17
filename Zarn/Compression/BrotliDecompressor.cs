@@ -25,9 +25,9 @@ public sealed class BrotliDecompressor : IDecompressor
         }
     }
 
-    private void DecompressCore(ref BrotliDecoder decoder,
-                                ReadOnlySequence<byte> source,
-                                IBufferWriter<byte> destination)
+    private static void DecompressCore(ref BrotliDecoder decoder,
+                                       ReadOnlySequence<byte> source,
+                                       IBufferWriter<byte> destination)
     {
         foreach (var chunk in source)
         {

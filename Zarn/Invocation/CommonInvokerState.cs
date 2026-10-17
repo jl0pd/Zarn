@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
 

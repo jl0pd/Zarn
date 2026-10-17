@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
 
@@ -13,13 +12,13 @@ internal abstract class InvokerState(ConnectionContext connection)
 
     public ConnectionContext Connection { get; } = connection;
 
-    private int _allocated = 0;
+    private int _allocated;
     private readonly short[] _operationIds = new short[connection.MaxConcurrentOperations];
     private readonly InvokerOperation?[] _operations = new InvokerOperation[connection.MaxConcurrentOperations];
     private short _lastOpId;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _semaphore = connection.ConcurrentOperationsSemaphore;
-    private int _remoteIdAcquiring = 0;
+    private int _remoteIdAcquiring;
 
     public void SetRemoteId(ref readonly CreateInstanceMessageResponse message)
     {
@@ -99,6 +98,8 @@ internal abstract class InvokerState(ConnectionContext connection)
         }
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", 
+            Justification = "not implemented yet")]
     public void OnCollected()
     {
         //Debug.Fail("not implemented");

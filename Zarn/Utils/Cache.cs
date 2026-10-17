@@ -76,7 +76,7 @@ internal sealed class Cache<T> : IDisposable where T : class
 
     public void Dispose()
     {
-        _allocate = null!;
+        _allocate = null;
         while (_queue.TryDequeue(out var value))
         {
             _free(value);

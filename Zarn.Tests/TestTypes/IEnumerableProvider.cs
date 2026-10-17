@@ -40,7 +40,7 @@ public sealed class EnumerableProvider : IEnumerableProvider
                 last = item;
             }
         }
-        catch
+        catch (OperationCanceledException)
         {
         }
 

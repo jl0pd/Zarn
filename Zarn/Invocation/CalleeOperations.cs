@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Zarn.Protocol;
 
 namespace Zarn.Invocation;

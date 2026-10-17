@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Zarn.Tests.Utils;
 
 internal sealed class InfiniteAsyncEnumerable : IAsyncEnumerable<int>

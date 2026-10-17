@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 using Zarn.Collections;
@@ -33,6 +32,7 @@ internal static class InvokerImplementer
     private static readonly MethodInfo SmallArray_Create3_Type;
     private static readonly MethodInfo SmallArray_Create4_Type;
 
+    [SuppressMessage("Performance", "CA1810:Initialize reference type static fields inline")]
     static InvokerImplementer()
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName()

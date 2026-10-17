@@ -8,7 +8,7 @@ namespace Zarn.Tests;
 
 public sealed class MessageTests
 {
-    private async Task TestRoundtripCore<T>(T requestMessage) where T : struct, IMessageInternal<T>
+    private static async Task TestRoundtripCore<T>(T requestMessage) where T : struct, IMessageInternal<T>
     {
         var buffer = new ChunkedArrayPoolBufferWriter<byte>(128, 4096);
         var serializationContext = new BinarySerializationContext(new RpcSettings());
