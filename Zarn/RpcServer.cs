@@ -52,7 +52,7 @@ public sealed class RpcServer : IAsyncDisposable
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        await foreach (var client in Start(cancellationToken).ConfigureAwait(false))
+        await foreach (var client in Start(cts.Token).ConfigureAwait(false))
         {
             await cts.CancelAsync().ConfigureAwait(false);
             return client;

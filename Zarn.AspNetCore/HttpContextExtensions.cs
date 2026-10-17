@@ -28,7 +28,7 @@ public static class HttpContextExtensions
         await using var server = new RpcServer(streamProvider, settings);
         server.ConfigureServices(configureServices);
 
-        var client = await server.AcceptSingleClient(context.RequestAborted);
+        await using var client = await server.AcceptSingleClient(context.RequestAborted);
         await client.CommunicationEnd;
     }
 }

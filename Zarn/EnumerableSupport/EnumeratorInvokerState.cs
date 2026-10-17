@@ -38,7 +38,7 @@ internal sealed class EnumeratorInvokerState : InvokerState
         _remoteIdTcs = null;
     }
 
-    protected override async void BeginAcquireRemoteIdCore()
+    protected override void BeginAcquireRemoteIdCore()
     {
         Connection.Dispatch(new GetEnumeratorMessageRequest
         {
