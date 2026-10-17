@@ -21,7 +21,7 @@ public sealed class ZarnController(ILogger<ZarnController> logger) : ControllerB
             s.AddSingleton<ICalculator, Calculator>();
         });
 
-        var client = await server.AcceptSingleClient(cancellationToken);
+        await using var client = await server.AcceptSingleClient(cancellationToken);
 
         logger.LogInformation("Client connected, delay {Delay}", sw.Elapsed);
 

@@ -53,36 +53,18 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
         var sendTask = _connection.SendMessages(token);
         var readTask = _connection.ReadMessages(token);
 
-        DisposeIfAnyCompleted(readTask, sendTask);
-
         _connectionTask = Task.WhenAll(sendTask, readTask);
+
         if (_connectionTask.IsCompleted)
         {
             await _connectionTask; // it has failed
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "Exception will be handled by different awaiter")]
-    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
-            Justification = "Method is called from method without sync ctx")]
-    private async void DisposeIfAnyCompleted(Task first, Task second)
-    {
-        try
-        {
-            await Task.WhenAny(first, second);
-        }
-        catch
-        {
-        }
-        await DisposeAsync();
-    }
-
     public void ConfigureServices(Action<IServiceCollection> configure)
     {
         _strategy.ConfigureServices(configure);
     }
-
 
     [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task",
             Justification = "LeaveContext is called")]
