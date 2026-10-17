@@ -9,10 +9,7 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
     private Task? _connectionTask;
     private ConnectionContext? _connection;
     private readonly IRpcClientStrategy _strategy;
-
-    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", 
-        Justification = "Field is disposed in thread-safe way")]
-    private CancellationTokenSource? _cts;
+    private readonly CommunicationMonitor _monitor = new();
 
     /// <summary>
     /// Task that can be used to wait for communication to end.
@@ -37,21 +34,28 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
             Justification = "LeaveContext is called")]
     public async ValueTask ConnectAsync(CancellationToken cancellationToken)
     {
-        if (_connection is { } || _connectionTask is { } || _cts is { })
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_connection is { } || _connectionTask is { })
         {
             throw new InvalidOperationException("Client has already started");
         }
 
         await ThreadingHelper.LeaveContext();
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // Given cancellationToken is used only for initial connection.
+        // Cancellation after this method completes should not cancel communication.
+        using var registration = cancellationToken.UnsafeRegister(
+                                        static state => ((CommunicationMonitor?)state)?.Dispose(),
+                                        _monitor);
 
-        var token = _cts.Token;
+        _connection = await _strategy.ConnectAsync(_monitor.CancellationToken);
 
-        _connection = await _strategy.ConnectAsync(token);
+        var sendTask = _connection.SendMessages(_monitor.CancellationToken);
+        var readTask = _connection.ReadMessages(_monitor.CancellationToken);
 
-        var sendTask = _connection.SendMessages(token);
-        var readTask = _connection.ReadMessages(token);
+        _monitor.AddCompleter(sendTask);
+        _monitor.AddCompleter(readTask);
 
         _connectionTask = Task.WhenAll(sendTask, readTask);
 
@@ -72,11 +76,8 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
     {
         await ThreadingHelper.LeaveContext();
 
-        if (Interlocked.Exchange(ref _cts, null) is { } cts)
-        {
-            await cts.CancelAsync();
-            cts.Dispose();
-        }
+        _monitor.Dispose();
+
         await _strategy.DisposeAsync();
         if (_connection is { } con)
         {
@@ -114,6 +115,38 @@ public sealed class RpcClient : IAsyncDisposable, IServiceProvider
         else
         {
             return _strategy.Services.GetService(serviceType);
+        }
+    }
+
+    private sealed class CommunicationMonitor : IDisposable
+    {
+        [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
+                Justification = "Field is disposed in thread-safe way")]
+        private CancellationTokenSource? _cts = new();
+
+        public CancellationToken CancellationToken { get; }
+
+        public CommunicationMonitor()
+        {
+            CancellationToken = _cts.Token;
+        }
+
+        public void AddCompleter(Task task)
+        {
+            _ = task.ContinueWith(_ => Dispose(),
+                                  CancellationToken.None,
+                                  TaskContinuationOptions.HideScheduler,
+                                  TaskScheduler.Default);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _cts, null) is { } cts)
+            {
+                // this cancellation token is used in a such way that `Cancel` won't ever throw.
+                cts.Cancel();
+                cts.Dispose();
+            }
         }
     }
 }
