@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Zarn.Collections;
 using Zarn.Protocol;
@@ -12,6 +11,8 @@ internal sealed class ExecuteRequestDispatcher : IThreadPoolWorkItem
 
     public ConnectionContext? Connection { get; set; }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Exception will be dispatched using connection.Fail")]
     public void Execute()
     {
         Debug.Assert(MessageBuffer is { } && Connection is { });

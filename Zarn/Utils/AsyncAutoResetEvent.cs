@@ -23,7 +23,7 @@ internal sealed class AsyncAutoResetEvent
         {
             RunContinuationsAsynchronously = true,
         };
-        private bool _isResultSet = false;
+        private bool _isResultSet;
         private readonly Lock _lock = new();
 
         public void SetResult()

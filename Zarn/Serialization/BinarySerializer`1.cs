@@ -7,10 +7,18 @@ public abstract class BinarySerializer<T> : BinarySerializer
     internal override byte[] TypePrefix => _typePrefix ??= GetTypePrefix(typeof(T));
     internal byte[]? _typePrefix;
 
-    public override bool CanConvert(Type type) => type.IsAssignableTo(typeof(T));
+    public override bool CanConvert(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return type.IsAssignableTo(typeof(T));
+    }
 
     public sealed override void Serialize(object? value, Type type, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(context);
+
         if (!type.IsAssignableTo(typeof(T)))
         {
             throw new ArgumentException("Attempt to serialize different type", nameof(type));
@@ -20,6 +28,9 @@ public abstract class BinarySerializer<T> : BinarySerializer
 
     public sealed override object? Deserialize(Type type, ref SequenceReader<byte> source, BinarySerializationContext context)
     {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(context);
+
         if (!type.IsAssignableTo(typeof(T)))
         {
             throw new ArgumentException("Attempt to deserialize different type", nameof(type));

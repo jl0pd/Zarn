@@ -6,6 +6,8 @@ public interface IGreeter
 
     ValueTask<string> GetGreetingValueAsync(string name);
 
+    Task<string> GetGreetingAsyncGeneric<T>(string name, T value);
+
     Task<string> GetGreetingAsync(string name);
 
     void SkipGreeting(string name);

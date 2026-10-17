@@ -2,7 +2,7 @@ using Zarn.Invocation;
 
 namespace Zarn.TypeGeneration;
 
-internal interface ICalleeFactory
+internal interface ICalleeFactory : IDisposable
 {
     CalleeBase Get();
 

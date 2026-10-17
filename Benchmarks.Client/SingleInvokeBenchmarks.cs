@@ -9,13 +9,14 @@ using Zarn;
 /// This benchmarks also indicator of latency, since new request isn't sent until previous one completes.
 /// </summary>
 [MemoryDiagnoser]
-public class SingleInvokeBenchmarks
+public class SingleInvokeBenchmarks : IDisposable
 {
     private GrpcChannel? _grpcChannel;
     private Benchmarks.Grpc.Calculator.CalculatorClient? _grpcClient;
     private HttpClient? _httpClient;
     private RpcClient? _rpcClient;
     private ICalculator? _rpcCalculator;
+    private bool _disposedValue;
 
     [GlobalSetup]
     public async Task Setup()
@@ -58,5 +59,26 @@ public class SingleInvokeBenchmarks
     {
         var calculator = _rpcCalculator ?? throw new InvalidOperationException();
         await calculator.Add(40, 2);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _grpcChannel?.Dispose();
+                _httpClient?.Dispose();
+                _rpcClient?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

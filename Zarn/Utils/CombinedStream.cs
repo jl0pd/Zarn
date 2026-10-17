@@ -13,9 +13,9 @@ internal sealed class CombinedStream(Stream readStream, Stream writeStream, Task
     public override async ValueTask DisposeAsync()
     {
         onDisposed.TrySetResult();
-        await readStream.DisposeAsync();
-        await writeStream.DisposeAsync();
-        await base.DisposeAsync();
+        await readStream.DisposeAsync().ConfigureAwait(false);
+        await writeStream.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
     }
 
     public override bool CanTimeout => readStream.CanTimeout || writeStream.CanTimeout;
@@ -31,7 +31,7 @@ internal sealed class CombinedStream(Stream readStream, Stream writeStream, Task
 
     public override void Write(ReadOnlySpan<byte> buffer) => writeStream.Write(buffer);
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => writeStream.WriteAsync(buffer, offset, count);
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => writeStream.WriteAsync(buffer, offset, count, cancellationToken);
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) => writeStream.WriteAsync(buffer, cancellationToken);
 

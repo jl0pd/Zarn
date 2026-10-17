@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
 
@@ -16,6 +15,8 @@ internal sealed class GetEnumeratorDispatcher : IThreadPoolWorkItem
 
     public bool IsAsync { get; set; }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", 
+            Justification = "Exception is dispatched to original caller")]
     public void Execute()
     {
         Debug.Assert(Connection is { } && TypeArg is { });

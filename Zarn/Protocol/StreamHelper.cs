@@ -7,6 +7,8 @@ namespace Zarn.Protocol;
 // Note: methods from this class are manually inlined into ConnectionContext to remove
 // allocations of StateMachineBox, caused by asynchronous completion of method.
 // If method is updated here, it must be updated inside ConnectionContext and vise-versa
+[SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", 
+        Justification = "Methods are called from methods without sync ctx")]
 internal static class StreamHelper
 {
     public static ReadOnlyMemory<byte> PrepareFirstChunk(long totalLength, ChunkedArrayPoolBufferWriter<byte>.Chunk chunk)
@@ -23,6 +25,8 @@ internal static class StreamHelper
                                           CancellationToken cancellationToken)
         where T : struct, IMessageInternal<T>
     {
+        Debug.Assert(SynchronizationContext.Current is null);
+
         buffer.Reserve(PackedInt.MaxSize);
 
         message.Serialize(buffer, serializationContext);
@@ -42,6 +46,8 @@ internal static class StreamHelper
                                              ChunkedArrayPoolBufferWriter<byte> writer,
                                              CancellationToken cancellationToken)
     {
+        Debug.Assert(SynchronizationContext.Current is null);
+
         int bytesRead = await stream.ReadAsync(initialBuffer.AsMemory(0, 1), cancellationToken);
         if (bytesRead == 0)
         {

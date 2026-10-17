@@ -34,6 +34,8 @@ internal sealed class ValueTaskWhenAll<T> : IValueTaskSource
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", 
+            Justification = "Exception is stored for rethrow")]
     private void OnCompleted(int index)
     {
         try

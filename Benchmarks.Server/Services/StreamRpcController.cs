@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Zarn;
 using Zarn.AspNetCore;
@@ -15,7 +14,7 @@ public sealed class ZarnController(ILogger<ZarnController> logger) : ControllerB
 
         var sw = Stopwatch.StartNew();
 
-        var server = new RpcServer(AspNetRpcStreamProvider.FromHttpContext(HttpContext));
+        await using var server = new RpcServer(AspNetRpcStreamProvider.FromHttpContext(HttpContext));
         server.ConfigureServices(s =>
         {
             s.AllowRemoteConnection<ICalculator>();

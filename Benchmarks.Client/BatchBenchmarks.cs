@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Threading.Channels;
 using BenchmarkDotNet.Attributes;
 using Benchmarks;
@@ -11,7 +10,7 @@ using Zarn;
 /// when they're processed concurrently
 /// </summary>
 [MemoryDiagnoser]
-public class BatchBenchmarks
+public class BatchBenchmarks : IDisposable
 {
     [Params(100, 1_000)]
     public int Iterations { get; set; }
@@ -25,6 +24,7 @@ public class BatchBenchmarks
     // used by ZarnWhenAll
     private Memory<ValueTask<int>> _tasks;
     private Memory<int> _results;
+    private bool _disposedValue;
 
     [GlobalSetup]
     public async Task Setup()
@@ -87,6 +87,8 @@ public class BatchBenchmarks
     }
 
     [Benchmark]
+    [SuppressMessage("Reliability", "CA2012:Use ValueTasks correctly",
+            Justification = "Task is added to queue, where it will be awaited only once")]
     public async Task Zarn()
     {
         var calculator = _rpcCalculator ?? throw new InvalidOperationException();
@@ -125,6 +127,7 @@ public class BatchBenchmarks
     /// This benchmark is not honest, but it shows how library can be used when maximum throughput is needed
     /// </summary>
     [Benchmark]
+    [SuppressMessage("Reliability", "CA2012:Use ValueTasks correctly", Justification = "ValueTask.WhenAll")]
     public async Task ZarnWhenAll()
     {
         var calculator = _rpcCalculator ?? throw new InvalidOperationException();
@@ -135,5 +138,26 @@ public class BatchBenchmarks
         }
 
         await new ValueTaskWhenAll<int>(_tasks, _results);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _grpcChannel?.Dispose();
+                _httpClient?.Dispose();
+                _rpcClient?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

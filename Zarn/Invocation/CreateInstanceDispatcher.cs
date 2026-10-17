@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
 
@@ -14,6 +13,8 @@ internal sealed class CreateInstanceDispatcher : IThreadPoolWorkItem
 
     public ObjectId InvokerId { get; set; }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", 
+        Justification = "Exception is captured to resend it to original caller")]
     public void Execute()
     {
         Debug.Assert(Connection is { });

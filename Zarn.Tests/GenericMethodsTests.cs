@@ -58,4 +58,10 @@ public sealed class GenericMethodsTests : RpcTestsBase
     {
         Assert.Equal((int[])[0, 1, 2, 3, 4], await inst.ToArrayAsync(Enumerable.Range(0, 5).AsAsyncEnumerable()));
     });
+
+    [Fact]
+    public Task TestGenericGreeter() => RunConnectToServerTest<IGreeter, Greeter>(async inst =>
+    {
+        Assert.Equal("Hello, Person { Name = John, Age = 22 } named John", await inst.GetGreetingAsyncGeneric("John", new Person("John", 22)));
+    });
 }

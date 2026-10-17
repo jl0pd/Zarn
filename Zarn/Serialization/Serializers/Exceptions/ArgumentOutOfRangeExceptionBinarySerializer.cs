@@ -24,7 +24,7 @@ internal sealed class ArgumentOutOfRangeExceptionBinarySerializer : ExceptionSer
         else
         {
             var trailer = $" (Parameter '{paramName}')";
-            var clearMessage = message.Replace(trailer, "").Split(s_newLines, StringSplitOptions.None)[0];
+            var clearMessage = message.Replace(trailer, "", StringComparison.Ordinal).Split(s_newLines, StringSplitOptions.None)[0];
 
             return new ArgumentOutOfRangeException(paramName, actualValue, clearMessage);
         }

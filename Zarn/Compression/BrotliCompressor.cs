@@ -55,11 +55,11 @@ public sealed class BrotliCompressor(int quality, int window) : ICompressor
         }
     }
 
-    private void WriteCore(ref BrotliEncoder encoder,
-                           byte[] buffer,
-                           IBufferWriter<byte> writer,
-                           ReadOnlySpan<byte> source,
-                           bool isFinalBlock)
+    private static void WriteCore(ref BrotliEncoder encoder,
+                                  byte[] buffer,
+                                  IBufferWriter<byte> writer,
+                                  ReadOnlySpan<byte> source,
+                                  bool isFinalBlock)
     {
         var operationStatus = OperationStatus.DestinationTooSmall;
         var destination = new Span<byte>(buffer);

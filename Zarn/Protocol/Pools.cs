@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Zarn.Collections;
 using Zarn.Compression;
@@ -11,11 +10,12 @@ using Zarn.Utils;
 
 namespace Zarn.Protocol;
 
-internal sealed class Pools
+internal sealed class Pools : IDisposable
 {
     public Pools(BinarySerializationContext serializationContext)
     {
         SerializationContext = serializationContext;
+        _ownsSharedPools = true;
 
         CalleeFactories = [];
         InvokerFactories = [];
@@ -67,8 +67,11 @@ internal sealed class Pools
 
     public BinarySerializationContext SerializationContext { get; }
 
+    // _onCompletedCache, _writerPool and _ctsPool are shared with connection-level Pools
+    // and only disposed by the instance that created them
+    private readonly bool _ownsSharedPools;
     private readonly ConcurrentDictionary<Type, Cache<OnCompletedWorker>> _onCompletedCache = new();
-    private readonly Cache<ChunkedArrayPoolBufferWriter<byte>> _writerPool = new(() => new ChunkedArrayPoolBufferWriter<byte>(4096, 65536));
+    private readonly Cache<ChunkedArrayPoolBufferWriter<byte>> _writerPool = new(() => new ChunkedArrayPoolBufferWriter<byte>(4096, 65536), w => w.Reset());
     private readonly Cache<CancellationTokenSource> _ctsPool = new(() => new(), x => x.Dispose());
     private readonly ConcurrentDictionary<Type, Cache<InvokerOperation>> _invokerOperationsCache = new();
     private readonly Cache<ExecuteRequestDispatcher> _executeRequestDispatcherPool = new(() => new ExecuteRequestDispatcher());
@@ -232,5 +235,30 @@ internal sealed class Pools
     {
         Debug.Assert(_decompressorPool is { });
         _decompressorPool.Return(decompressor);
+    }
+
+    public void Dispose()
+    {
+        if (_ownsSharedPools)
+        {
+            foreach (var (_, cache) in _onCompletedCache)
+            {
+                cache.Dispose();
+            }
+            _writerPool.Dispose();
+            _ctsPool.Dispose();
+        }
+
+        foreach (var (_, cache) in _invokerOperationsCache)
+        {
+            cache.Dispose();
+        }
+        _executeRequestDispatcherPool.Dispose();
+        _executeResponseDispatcherPool.Dispose();
+        _ctsCancelDispatcherPool.Dispose();
+        _createInstanceDispatcherPool.Dispose();
+        _getEnumeratorDispatcherPool.Dispose();
+        _compressorPool?.Dispose();
+        _decompressorPool?.Dispose();
     }
 }

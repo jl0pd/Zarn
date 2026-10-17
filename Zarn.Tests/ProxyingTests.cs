@@ -31,6 +31,8 @@ public sealed class ProxyingTests : RpcTestsBase
     });
 
     [Fact]
+    [SuppressMessage("Performance", "CA1849:Call async methods when in an async method", 
+            Justification = "Sync method is used for testing")]
     public Task GetSyncEnumerable() => RunConnectToServerTest<IEnumerableProvider, EnumerableProvider>(async (inst) =>
     {
         var result = inst.GetRange(5).ToArray();
@@ -69,7 +71,7 @@ public sealed class ProxyingTests : RpcTestsBase
             await foreach (var item in inst.GetInfiniteAsync().WithCancellation(cts.Token))
             {
                 enumerated = true;
-                cts.Cancel();
+                await cts.CancelAsync();
             }
         });
 

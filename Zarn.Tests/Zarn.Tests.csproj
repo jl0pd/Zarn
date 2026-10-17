@@ -5,6 +5,17 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <NoWarn>
+      $(NoWarn);
+      CA1515; <!-- make type internal -->
+      CA2007; <!-- configureAwait(false) -->
+      CA5394; <!-- System.Random is insecure -->
+      CA1062; <!-- check args for null -->
+      CA1716; <!-- do not use keywords as member names -->
+    </NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <PackageReference Include="Nerdbank.Streams" />

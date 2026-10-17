@@ -19,7 +19,7 @@ public static class AspNetRpcStreamProvider
     {
         public override async ValueTask<Stream?> OpenStreamAsync(CancellationToken cancellationToken)
         {
-            await context.EnableStreaming(cancellationToken);
+            await context.EnableStreaming(cancellationToken).ConfigureAwait(false);
             return new AspNetCombinedStream(context.Request.Body, context.Response.Body);
         }
     }

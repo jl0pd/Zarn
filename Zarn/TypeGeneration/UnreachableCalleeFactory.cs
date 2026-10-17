@@ -6,6 +6,8 @@ internal sealed class UnreachableCalleeFactory : ICalleeFactory
 {
     public static UnreachableCalleeFactory Instance { get; } = new();
 
+    public void Dispose() => throw ThrowHelper.Unreachable;
+
     public CalleeBase Get() => throw ThrowHelper.Unreachable;
 
     public void Return(CalleeBase callee) => throw ThrowHelper.Unreachable;

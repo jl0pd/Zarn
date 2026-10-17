@@ -1,6 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Zarn.Protocol;
@@ -97,6 +95,8 @@ public sealed class BinarySerializationContext
 
     public BinarySerializationContext(RpcSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         foreach (var serializer in settings.Serializers)
         {
             if (serializer is BinarySerializerFactory factory)
@@ -221,6 +221,8 @@ public sealed class BinarySerializationContext
 
     public void SerializeAny(object? value, IBufferWriter<byte> writer)
     {
+        ArgumentNullException.ThrowIfNull(writer);
+     
         if (value is null)
         {
             writer.GetSpan()[0] = (byte)ObjectType.Null;

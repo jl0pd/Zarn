@@ -3,7 +3,7 @@ namespace Zarn;
 /// <summary>
 /// Base type for exceptions raised by this library
 /// </summary>
-public abstract class RpcException : ApplicationException
+public abstract class RpcException : Exception
 {
     protected RpcException()
     {

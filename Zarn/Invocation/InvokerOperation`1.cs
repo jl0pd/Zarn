@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Threading.Tasks.Sources;
 
 namespace Zarn.Invocation;

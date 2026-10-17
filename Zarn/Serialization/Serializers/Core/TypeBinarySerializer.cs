@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Zarn.Serialization.Serializers.Core;
 
@@ -22,7 +21,7 @@ internal sealed class TypeBinarySerializer : BinarySerializer<Type?>
             return null;
         }
 
-        var idx = typeName.IndexOf(", Version=");
+        var idx = typeName.IndexOf(", Version=", StringComparison.Ordinal);
         if (idx < 0)
         {
             return typeName;

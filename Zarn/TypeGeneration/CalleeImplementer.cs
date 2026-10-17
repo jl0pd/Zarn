@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 using Zarn.Collections;
@@ -29,6 +28,7 @@ internal static class CalleeImplementer
     private static readonly MethodInfo ReadOnlySpan_Type_get_Length;
     private static readonly MethodInfo ReadOnlySpan_Type_get_Item;
 
+    [SuppressMessage("Performance", "CA1810:Initialize reference type static fields inline")]
     static CalleeImplementer()
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName()
@@ -317,8 +317,8 @@ internal static class CalleeImplementer
             private void InvokeStub#N(ref SequenceReader<byte> argumentsReader)
             {
                 var genArgs = base.ParseArgument<SmallArrayN<Type>>(ref argumentsReader).AsSpan();
-                var trampoline = base.TryFindTrampoline(ref InvokeStub#N_Trampolines, genArgs)
-                              ?? base.CreateTrampoline(
+                var trampoline = TryFindTrampoline(ref InvokeStub#N_Trampolines, genArgs)
+                              ?? CreateTrampoline(
                                         ref InvokeStub#N_Trampolines,
                                         typeof(GenericMethodInvokeTrampoline#N<>).MakeGenericType(genArgs.ToArray()));
 
@@ -392,19 +392,17 @@ internal static class CalleeImplementer
         var genArgsLocal = il.DeclareLocal(typeof(ReadOnlySpan<Type>));
         il.Emit(OpCodes.Stloc, genArgsLocal);
 
-        // base.TryFindTrampoline(ref InvokeStub#N_Trampolines, genArgs);
-        il.Emit(OpCodes.Ldarg_0);
+        // TryFindTrampoline(ref InvokeStub#N_Trampolines, genArgs);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, trampolinesField);
         il.Emit(OpCodes.Ldloc, genArgsLocal);
-        il.Emit(OpCodes.Callvirt, CalleeBase_TryFindTrampoline);
+        il.Emit(OpCodes.Call, CalleeBase_TryFindTrampoline);
 
-        // ?? base.CreateTrampoline(ref InvokeStub#N_Trampolines,
-        //                          typeof(GenericMethodInvokeTrampoline#N<>).MakeGenericType(genArgs.ToArray()))
+        // ?? CreateTrampoline(ref InvokeStub#N_Trampolines,
+        //                     typeof(GenericMethodInvokeTrampoline#N<>).MakeGenericType(genArgs.ToArray()))
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, invokeLabel);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, trampolinesField);
         // typeof(GenericMethodInvokeTrampoline#N<>).MakeGenericType(genArgs.ToArray())
@@ -413,7 +411,7 @@ internal static class CalleeImplementer
         il.Emit(OpCodes.Ldloca, genArgsLocal);
         il.Emit(OpCodes.Call, typeof(Span<Type>).GetMethod(nameof(Span<Type>.ToArray))!);
         il.Emit(OpCodes.Callvirt, ImplementerCommon.Type_MakeGenericType);
-        il.Emit(OpCodes.Callvirt, CalleeBase_CreateTrampoline);
+        il.Emit(OpCodes.Call, CalleeBase_CreateTrampoline);
 
         // trampoline.Invoke(this, ref argumentsReader);
         il.MarkLabel(invokeLabel);

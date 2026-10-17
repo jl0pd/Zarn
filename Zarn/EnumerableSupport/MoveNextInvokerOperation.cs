@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Threading.Tasks.Sources;
 using Zarn.Invocation;
 
@@ -9,7 +8,7 @@ internal sealed class MoveNextInvokerOperation<T> : InvokerOperation, IValueTask
 {
     private ManualResetValueTaskSourceCore<bool> _tcs = new() { RunContinuationsAsynchronously = true };
 
-    private EnumeratorInvoker<T>? _enumerator = null;
+    private EnumeratorInvoker<T>? _enumerator;
 
     public ValueTask<bool> Start(EnumeratorInvoker<T> enumerator)
     {

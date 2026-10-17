@@ -20,7 +20,7 @@ internal sealed class AspNetCombinedStream(Stream readStream, Stream writeStream
 
     public override void Write(ReadOnlySpan<byte> buffer) => writeStream.Write(buffer);
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => writeStream.WriteAsync(buffer, offset, count);
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => writeStream.WriteAsync(buffer, offset, count, cancellationToken);
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) => writeStream.WriteAsync(buffer, cancellationToken);
 

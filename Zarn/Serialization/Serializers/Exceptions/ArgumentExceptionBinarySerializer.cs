@@ -20,7 +20,7 @@ internal sealed class ArgumentExceptionBinarySerializer : ExceptionSerializerBas
         else
         {
             var trailer = $" (Parameter '{paramName}')";
-            var clearMessage = message.Replace(trailer, "");
+            var clearMessage = message.Replace(trailer, "", StringComparison.Ordinal);
 
             return new ArgumentException(clearMessage, paramName);
         }

@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-
 namespace Zarn;
 
 internal static class ThrowHelper
@@ -34,6 +31,6 @@ internal static class ThrowHelper
     public static Exception Fail(string message)
     {
         Debug.Fail(message);
-        return new Exception(message);
+        return new InvalidOperationException(message);
     }
 }

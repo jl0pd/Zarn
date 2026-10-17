@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using Zarn.Collections;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
@@ -36,7 +35,7 @@ internal abstract class InvokerOperation
         set => _message.MethodSlot = value;
     }
 
-    private int _isResultSet = 0;
+    private int _isResultSet;
 
     private Task? _waitForFreeOperationSlot;
     private Action? _startCoreAction;
@@ -121,6 +120,8 @@ internal abstract class InvokerOperation
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Exception will be rethrown when caller awaits task")]
     private void StartCore()
     {
         if (_waitForFreeOperationSlot is { } task)

@@ -1,10 +1,9 @@
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using Zarn.Collections;
 using Zarn.Compression;
 using Zarn.Protocol;
 using Zarn.Protocol.Messages;
 using Zarn.Serialization;
+using Zarn.Utils;
 
 namespace Zarn;
 
@@ -37,8 +36,12 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
         throw new InvalidOperationException("Cannot configure services for client received from RpcServer");
     }
 
+    [SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", 
+            Justification = "LeaveContext is called")]
     public async ValueTask<ConnectionContext> ConnectAsync(CancellationToken cancellationToken)
     {
+        await ThreadingHelper.LeaveContext();
+
         var initialBuffer = new byte[PackedInt.MaxSize];
         var buffer = pools.GetWriter();
         if (!await StreamHelper.Read(stream, initialBuffer, buffer, cancellationToken))
@@ -84,7 +87,7 @@ internal sealed class ServerRpcClientStrategy(Stream stream,
 
     public async ValueTask DisposeAsync()
     {
-        await serviceScope.DisposeAsync();
-        await stream.DisposeAsync();
+        await serviceScope.DisposeAsync().ConfigureAwait(false);
+        await stream.DisposeAsync().ConfigureAwait(false);
     }
 }

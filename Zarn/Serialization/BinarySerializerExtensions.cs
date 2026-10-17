@@ -7,6 +7,8 @@ public static class BinarySerializerExtensions
 {
     public static byte[] SerializeToByteArray<T>(this BinarySerializer<T> serializer, T value, BinarySerializationContext context)
     {
+        ArgumentNullException.ThrowIfNull(serializer);
+
         var writer = new ArrayBufferWriter<byte>();
         serializer.Serialize(value, writer, context);
         return writer.WrittenSpan.ToArray();

@@ -6,7 +6,7 @@ namespace Zarn.Tests;
 
 public sealed class ConnectionTests : RpcTestsBase
 {
-    private async Task TestUsingGreeter(Func<(RpcStreamProvider, RpcStreamProvider)> streamFactory)
+    private static async Task TestUsingGreeter(Func<(RpcStreamProvider, RpcStreamProvider)> streamFactory)
     {
         await RunConnectToServerTestCore(
                 streamFactory,
