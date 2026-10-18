@@ -63,5 +63,5 @@ public sealed class GenericMethodsTests : RpcTestsBase
     public Task TestGenericGreeter() => RunConnectToServerTest<IGreeter, Greeter>(async inst =>
     {
         Assert.Equal("Hello, Person { Name = John, Age = 22 } named John", await inst.GetGreetingAsyncGeneric("John", new Person("John", 22)));
-    });
+    }, s => s.AllowedTypes.Add(typeof(Person)));
 }

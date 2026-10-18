@@ -87,6 +87,9 @@ performance. See doc on `RpcSettings.Serializers` for more details.
 * **Asp.net support**: Package `Zarn.AspNetCore` provides support for running RPC
 server inside Aspnet over http2 connection.
 
+* Opt-in support for arbitrary types. Use `RpcSettings.AllowedTypes` to allow types to be used
+as generic parameters and allow polymorphic deserialization.
+
 ```csharp
 // inside startup code configure RpcSettings
 builder.Services.AddSingleton(new RpcSettings {});

@@ -6,18 +6,23 @@ namespace Zarn.Tests;
 
 public abstract class RpcTestsBase
 {
-    protected static async Task RunConnectToServerTest<TInterface, TImpl>(Func<TInterface, Task> assert)
+    protected static async Task RunConnectToServerTest<TInterface, TImpl>(Func<TInterface, Task> assert, Action<RpcSettings>? configureSettings = null)
     where TImpl : class, TInterface
     where TInterface : class
     {
-        await RunConnectToServerTestCore<TInterface, TImpl>(assert, new RpcSettings());
-        await RunConnectToServerTestCore<TInterface, TImpl>(assert, new RpcSettings()
+        var first = new RpcSettings();
+        configureSettings?.Invoke(first);
+        await RunConnectToServerTestCore<TInterface, TImpl>(assert, first);
+
+        var second = new RpcSettings()
         {
             CompressionProviders =
             {
                 new BrotliCompressionProvider(System.IO.Compression.CompressionLevel.SmallestSize),
             }
-        });
+        };
+        configureSettings?.Invoke(second);
+        await RunConnectToServerTestCore<TInterface, TImpl>(assert, second);
     }
 
     protected static async Task RunConnectToServerTestCore<TInterface, TImpl>(Func<TInterface, Task> assert, RpcSettings settings)

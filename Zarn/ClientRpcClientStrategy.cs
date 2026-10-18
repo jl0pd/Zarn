@@ -60,13 +60,23 @@ internal sealed class ClientRpcClientStrategy : IRpcClientStrategy
 
         var buffer = _pools.GetWriter();
 
+        var (interfaces, classes) = InterfaceDescriptor.CollectDescriptors(Services.GetRequiredService<AllowedRemoteConnections>());
+        foreach (var inter in interfaces)
+        {
+            _serializationContext.AllowType(inter.GetStoredType());
+        }
+        foreach (var cls in classes)
+        {
+            _serializationContext.AllowType(cls);
+        }
+
         var request = new HandshakeRequestMessage
         {
             ProtocolVersionMajor = 1,
             ProtocolVersionMinor = 0,
             SupportedCompressions = _settings.CompressionProviders.Select(x => x.AlgorithmName).ToArray(),
             AllowMinorVersionMismatch = _settings.AllowMinorVersionMismatch,
-            Interfaces = InterfaceDescriptor.CollectDescriptors(Services.GetRequiredService<AllowedRemoteConnections>()),
+            Interfaces = interfaces,
         };
 
         await StreamHelper.Send(stream, request, buffer, _serializationContext, cancellationToken);

@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace Zarn.Serialization.Serializers;
+namespace Zarn.Serialization.Serializers.Optional;
 
 internal sealed class ByteArrayBinarySerializer : BinarySerializer<byte[]?>
 {

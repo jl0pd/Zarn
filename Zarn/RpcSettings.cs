@@ -39,6 +39,11 @@ public sealed class RpcSettings : ICloneable
     public IList<Type> TransparentExceptions { get; }
 
     /// <summary>
+    /// List of types that are allowed to be deserialized and used as generic arguments.
+    /// </summary>
+    public IList<Type> AllowedTypes { get; }
+
+    /// <summary>
     /// Indicates whether communication is allowed when protocol version has changed in insignificant way.
     /// Minor protocol revision changes when new message type is added. So client and server may still communicate
     /// if they are sure that newer features are not used. Major protocol revision changes when existing message is changed.
@@ -101,6 +106,7 @@ public sealed class RpcSettings : ICloneable
         Serializers = new FreezableList<BinarySerializer>(_isFrozen);
         TransparentExceptions = new FreezableList<Type>(_isFrozen, BinarySerializationContext.ExceptionSerializers.Keys);
         CompressionProviders = new FreezableList<CompressionProvider>(_isFrozen);
+        AllowedTypes = new FreezableList<Type>(_isFrozen);
     }
 
     /// <summary>
@@ -138,6 +144,11 @@ public sealed class RpcSettings : ICloneable
         foreach (var item in CompressionProviders)
         {
             result.CompressionProviders.Add(item);
+        }
+
+        foreach (var item in AllowedTypes)
+        {
+            result.AllowedTypes.Add(item);
         }
 
         return result;

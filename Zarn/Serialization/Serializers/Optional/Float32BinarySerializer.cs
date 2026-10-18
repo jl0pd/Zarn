@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 
-namespace Zarn.Serialization.Serializers;
+namespace Zarn.Serialization.Serializers.Optional;
 
 internal sealed class Float32BinarySerializer : BinarySerializer<float>
 {
