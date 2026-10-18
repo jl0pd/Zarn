@@ -13,6 +13,7 @@
       CA5394; <!-- System.Random is insecure -->
       CA1062; <!-- check args for null -->
       CA1716; <!-- do not use keywords as member names -->
+      CA1812; <!-- internal type never instantiated -->
     </NoWarn>
   </PropertyGroup>
 
