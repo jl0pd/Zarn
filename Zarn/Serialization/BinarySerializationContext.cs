@@ -2,10 +2,10 @@ using System.Buffers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Zarn.Protocol;
-using Zarn.Serialization.Serializers;
 using Zarn.Serialization.Serializers.Core;
 using Zarn.Serialization.Serializers.Core.Collections;
 using Zarn.Serialization.Serializers.Exceptions;
+using Zarn.Serialization.Serializers.Optional;
 
 namespace Zarn.Serialization;
 
@@ -13,7 +13,6 @@ public sealed class BinarySerializationContext
 {
     private readonly Dictionary<Type, BinarySerializer> _instances = new()
     {
-        { typeof(Type), TypeBinarySerializer.Instance },
         { typeof(byte), ByteBinarySerializer.Instance },
         { typeof(short), PackedShortBinarySerializer.Instance },
         { typeof(int), PackedIntBinarySerializer.Instance },
@@ -40,9 +39,12 @@ public sealed class BinarySerializationContext
         SmallArray2BinarySerializerFactory.Instance,
         SmallArray3BinarySerializerFactory.Instance,
         SmallArray4BinarySerializerFactory.Instance,
+        ListBinarySerializerFactory.Instance,
     ];
 
     private readonly List<BinarySerializer> _typedSerializers = [];
+
+    private readonly TypeBinarySerializer _typeBinarySerializer = new();
 
     internal static Dictionary<Type, BinarySerializer> ExceptionSerializers { get; } = new()
     {
@@ -93,9 +95,13 @@ public sealed class BinarySerializationContext
     private readonly JsonBinarySerializerFactory _jsonFactory = new();
     private readonly StrongBox<ConnectionContext?> _connection = new();
 
+    internal bool IsFrozen => _connection.Value is { };
+
     public BinarySerializationContext(RpcSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+
+        _instances.Add(typeof(Type), _typeBinarySerializer);
 
         foreach (var serializer in settings.Serializers)
         {
@@ -115,10 +121,37 @@ public sealed class BinarySerializationContext
             {
                 Debug.Assert(serializer is not BinarySerializerFactory);
                 _instances.TryAdd(exType, serializer);
+                _typeBinarySerializer.AllowType(exType);
             }
         }
 
         _factories.Add(new InterfaceProxyBinarySerializerFactory(_connection));
+
+        AllowType(typeof(List<>));
+        AllowType(typeof(Nullable<>));
+        // do not allow HashSet or Dictionary because they have comparer which is hard to serialize
+
+        foreach (var type in settings.AllowedTypes)
+        {
+            AllowType(type);
+        }
+    }
+
+    /// <summary>
+    /// Allows given <paramref name="type"/> to be deserialized or used as generic parameter.
+    /// </summary>
+    /// <param name="type">The type to allow</param>
+    /// <returns><see langword="true"/> if type was added, <see langword="false"/> if type was already registered</returns>
+    public bool AllowType(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+
+        if (IsFrozen)
+        {
+            throw new InvalidOperationException("Serialization context is frozen and cannot be modified");
+        }
+
+        return _typeBinarySerializer.AllowType(type);
     }
 
     internal void SetConnection(ConnectionContext connection)

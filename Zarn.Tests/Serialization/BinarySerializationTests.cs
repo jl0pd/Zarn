@@ -4,10 +4,26 @@ using Zarn.Serialization;
 
 namespace Zarn.Tests.Serialization;
 
-[SuppressMessage("Design", "CA1024:Use properties where appropriate", 
+[SuppressMessage("Design", "CA1024:Use properties where appropriate",
     Justification = "Methods for MemberData")]
 public sealed class BinarySerializationTests
 {
+    private sealed class UnallowedType;
+
+    private static void TestRoundtripCore<T>(T value, BinarySerializationContext context)
+    {
+        var writer = new ArrayBufferWriter<byte>();
+
+        context.Serialize(value, writer);
+
+        var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
+
+        var result = context.Deserialize<T>(ref reader);
+
+        Assert.Equal(0, reader.Remaining);
+        Assert.Equal(value, result);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -22,26 +38,73 @@ public sealed class BinarySerializationTests
     [InlineData(-1.0)]
     [InlineData("")]
     [InlineData("some text")]
-    [InlineData(typeof(int))]
-    [InlineData(typeof(List<>))]
-    [InlineData(typeof(Dictionary<,>))]
     [MemberData(nameof(GetObjectId))]
     [MemberData(nameof(GetOperationId))]
     public void TestRoundtrip<T>(T value)
+    {
+        Assert.NotNull(value);
+
+        var settings = new RpcSettings();
+        var context = new BinarySerializationContext(settings);
+        context.AllowType(value.GetType());
+        context.AllowType(typeof(T));
+        if (value is Type t)
+        {
+            context.AllowType(t);
+        }
+
+        TestRoundtripCore(value, context);
+        TestRoundtripCore(new T[] { value, value }, context);
+        TestRoundtripCore(new List<T[]> { new T[] { value }, new T[] { value, value } }, context);
+        TestRoundtripCore(new List<T>[] { [value], [value, value] }, context);
+    }
+
+    [Theory]
+    [InlineData(typeof(int))]
+    [InlineData(typeof(List<>))]
+    [InlineData(typeof(Dictionary<,>))]
+    public void TestTypeRoundtrip(Type type)
+    {
+        // use separate method, because generic method resolves to private RuntimeType
+        TestRoundtrip(type);
+    }
+
+    [Theory]
+    [InlineData(typeof(UnallowedType))]
+    [InlineData(typeof(List<UnallowedType>))]
+    public void TestUnallowedTypeThrows(Type instanceType)
     {
         var settings = new RpcSettings();
         var context = new BinarySerializationContext(settings);
 
         var writer = new ArrayBufferWriter<byte>();
+        context.Serialize(instanceType, writer);
 
-        context.Serialize(value, writer);
+        var ex = Record.Exception(() =>
+        {
+            var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
+            context.Deserialize<Type>(ref reader);
+        });
 
-        var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
+        Assert.IsType<InvalidOperationException>(ex);
+    }
 
-        var result = context.Deserialize<T>(ref reader);
+    [Fact]
+    public void TestMalformedTypeThrows()
+    {
+        var settings = new RpcSettings();
+        var context = new BinarySerializationContext(settings);
 
-        Assert.Equal(0, reader.Remaining);
-        Assert.Equal(value, result);
+        var writer = new ArrayBufferWriter<byte>();
+        context.Serialize("unallowed type, Asm=xxx", writer);
+
+        var ex = Record.Exception(() =>
+        {
+            var reader = new SequenceReader<byte>(new ReadOnlySequence<byte>(writer.WrittenMemory));
+            context.Deserialize<Type>(ref reader);
+        });
+
+        Assert.IsType<InvalidDataException>(ex);
     }
 
     public static IEnumerable<object[]> GetObjectId()

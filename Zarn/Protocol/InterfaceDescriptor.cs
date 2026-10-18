@@ -19,7 +19,20 @@ internal sealed record InterfaceDescriptor(SignatureType.Named Name, MethodSigna
                         .Select(MethodSignature.FromMethod)
                         .ToArray();
 
-        return new InterfaceDescriptor((SignatureType.Named)SignatureType.Create(type), methods);
+        return new InterfaceDescriptor((SignatureType.Named)SignatureType.Create(type), methods)
+        {
+            _resolvedType = type,
+        };
+    }
+
+    public Type GetStoredType()
+    {
+        if (_resolvedType is null)
+        {
+            ThrowHelper.ThrowUnreachable();
+        }
+
+        return _resolvedType;
     }
 
     public Type? ResolveType()
@@ -32,7 +45,7 @@ internal sealed record InterfaceDescriptor(SignatureType.Named Name, MethodSigna
         return _resolvedMethods ??= ResolveMethodsCore();
     }
 
-    private  MethodInfo?[] ResolveMethodsCore()
+    private MethodInfo?[] ResolveMethodsCore()
     {
         var type = ResolveType()
             ?? throw new InvalidOperationException("Unable to resolve methods for missing type: " + Name.AssemblyQualifiedName);
@@ -87,60 +100,96 @@ internal sealed record InterfaceDescriptor(SignatureType.Named Name, MethodSigna
         context.Serialize(Methods, writer);
     }
 
-    public static HashSet<Type> CollectInterfaces(IEnumerable<Type> types)
+    private static readonly HashSet<Type> s_skipTypes = 
+    [
+        typeof(void),
+        typeof(Task),
+        typeof(ValueTask),
+        typeof(Task<>),
+        typeof(ValueTask<>),
+    ];
+
+    /// <summary>
+    /// Collects interfaces for RPC type generation and types that are allowed to be deserialized.
+    /// </summary>
+    public static (HashSet<Type> Interfaces, HashSet<Type> Classes) CollectInterfaces(IEnumerable<Type> types)
     {
-        var result = new HashSet<Type>();
-        var queue = new Queue<Type>(types);
+        var interfaces = new HashSet<Type>();
+        var classes = new HashSet<Type>();
+        var visited = new HashSet<Type>();
 
-        while (queue.TryDequeue(out var type))
+        foreach (var type in types)
         {
-            if (!type.IsInterface)
+            AddType(type);
+        }
+
+        classes.ExceptWith(s_skipTypes);
+
+        return (interfaces, classes);
+
+        void AddType(Type type)
+        {
+            if (!visited.Add(type))
             {
-                // handled in services.AllowRemoteConnection<T>();
-                throw ThrowHelper.Unreachable;
+                return;
             }
 
-            if (!result.Add(type))
+            if (type.IsGenericTypeDefinition)
             {
-                continue;
+                if (type.IsInterface)
+                {
+                    interfaces.Add(type);
+                    AddTypesFromMethods(type);
+                }
+                else
+                {
+                    classes.Add(type);
+                }
             }
-
-            foreach (var method in type.GetMethods())
+            else if (type.IsGenericType)
             {
-                foreach (var param in method.GetParameters())
+                foreach (var genArg in type.GetGenericArguments())
                 {
-                    if (param.ParameterType.IsInterface)
-                    {
-                        queue.Enqueue(param.ParameterType);
-                    }
+                    AddType(genArg);
                 }
 
-                var retType = method.ReturnType;
-                if (retType.IsInterface)
-                {
-                    queue.Enqueue(retType);
-                }
-
-                if (retType.IsConstructedGenericType)
-                {
-                    var genDef = retType.GetGenericTypeDefinition();
-                    if (genDef == typeof(Task<>) || genDef == typeof(ValueTask<>))
-                    {
-                        var genArg = retType.GetGenericArguments()[0];
-                        if (genArg.IsInterface)
-                        {
-                            queue.Enqueue(genArg);
-                        }
-                    }
-                }
+                AddType(type.GetGenericTypeDefinition());
+            }
+            else if (type.IsArray || type.IsPointer || type.IsByRef)
+            {
+                AddType(type.GetElementType()!);
+            }
+            else if (type.IsInterface)
+            {
+                interfaces.Add(type);
+                AddTypesFromMethods(type);
+            }
+            else if (!type.IsGenericParameter)
+            {
+                classes.Add(type);
             }
         }
 
-        return result;
+        void AddTypesFromMethods(Type type)
+        {
+            // do not scan classes, otherwise it would load entire BCL
+            Debug.Assert(type.IsInterface);
+
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                AddType(method.ReturnType);
+                foreach (var param in method.GetParameters())
+                {
+                    AddType(param.ParameterType);
+                }
+            }
+        }
     }
 
-    public static InterfaceDescriptor[] CollectDescriptors(IEnumerable<Type> types)
+    public static (InterfaceDescriptor[] Interfaces, HashSet<Type> Classes) CollectDescriptors(IEnumerable<Type> types)
     {
-        return CollectInterfaces(types).Select(FromType).ToArray();
+        var (interfaces, classes) = CollectInterfaces(types);
+        var interfaceDescriptors = interfaces.Select(FromType).ToArray();
+        return (interfaceDescriptors, classes);
     }
 }

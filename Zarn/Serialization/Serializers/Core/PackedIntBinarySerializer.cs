@@ -6,7 +6,7 @@ internal sealed class PackedIntBinarySerializer : BinarySerializer<int>
 {
     public static PackedIntBinarySerializer Instance { get; } = new();
 
-    public override int Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    public static int DeserializeCore(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
         if (!PackedInt.TryRead(source.UnreadSpan, out long value, out int consumed))
         {
@@ -24,11 +24,21 @@ internal sealed class PackedIntBinarySerializer : BinarySerializer<int>
         return checked((int)value);
     }
 
-    public override void Serialize(int value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public override int Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
+    {
+        return DeserializeCore(ref source, context);
+    }
+
+    public static void SerializeCore(int value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
         var size = PackedInt.GetRequiredSize(value);
         var span = writer.GetSpan(size);
         int written = PackedInt.Write(value, span);
         writer.Advance(written);
+    }
+
+    public override void Serialize(int value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    {
+        SerializeCore(value, writer, context);
     }
 }

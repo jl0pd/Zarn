@@ -11,7 +11,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
 
     public override string? Deserialize(ref SequenceReader<byte> source, BinarySerializationContext context)
     {
-        int length = PackedIntBinarySerializer.Instance.Deserialize(ref source, context);
+        int length = PackedIntBinarySerializer.DeserializeCore(ref source, context);
         if (length == -1)
         {
             return null;
@@ -32,15 +32,15 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
         }
     }
 
-    public override void Serialize(string? value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    public static void SerializeCore(string? value, IBufferWriter<byte> writer, BinarySerializationContext context)
     {
         if (value is null)
         {
-            PackedIntBinarySerializer.Instance.Serialize(-1, writer, context);
+            PackedIntBinarySerializer.SerializeCore(-1, writer, context);
         }
         else if (value.Length == 0)
         {
-            PackedIntBinarySerializer.Instance.Serialize(0, writer, context);
+            PackedIntBinarySerializer.SerializeCore(0, writer, context);
         }
         else
         {
@@ -52,7 +52,7 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
                 bool success = Encoding.UTF8.TryGetBytes(value, bytes, out int written);
                 Debug.Assert(success, "We've rented enough bytes, there shouldn't be an error");
 
-                PackedIntBinarySerializer.Instance.Serialize(written, writer, context);
+                PackedIntBinarySerializer.SerializeCore(written, writer, context);
                 bytes.AsSpan(0, written).CopyTo(writer.GetSpan(written));
                 writer.Advance(written);
             }
@@ -61,5 +61,10 @@ internal sealed class StringBinarySerializer : BinarySerializer<string?>
                 ArrayPool<byte>.Shared.Return(bytes);
             }
         }
+    }
+
+    public override void Serialize(string? value, IBufferWriter<byte> writer, BinarySerializationContext context)
+    {
+        SerializeCore(value, writer, context);
     }
 }

@@ -15,6 +15,15 @@ internal static class ThrowHelper
     }
 
     [DoesNotReturn]
+    [DebuggerNonUserCode]
+    [ExcludeFromCodeCoverage]
+    public static void ThrowUnreachable()
+    {
+        // keep jitted body of caller small for improved performance
+        throw Unreachable;
+    }
+
+    [DoesNotReturn]
     public static void ThrowEndOfStream()
     {
         throw new EndOfStreamException();

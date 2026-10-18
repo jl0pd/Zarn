@@ -84,8 +84,18 @@ public sealed class RpcServer : IAsyncDisposable
 
         _services = _serviceDescriptors.BuildServiceProvider();
 
-        var interfaceDescriptors = InterfaceDescriptor.CollectDescriptors(_services.GetRequiredService<AllowedRemoteConnections>());
+        var (interfaces, classes) = InterfaceDescriptor.CollectDescriptors(_services.GetRequiredService<AllowedRemoteConnections>());
         var pools = _services.GetRequiredService<Pools>();
+
+        foreach (var inter in interfaces)
+        {
+            pools.SerializationContext.AllowType(inter.GetStoredType());
+        }
+
+        foreach (var cls in classes)
+        {
+            pools.SerializationContext.AllowType(cls);
+        }
 
         using var actualCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
         var actualCt = actualCts.Token;
@@ -103,7 +113,7 @@ public sealed class RpcServer : IAsyncDisposable
                                                 stream,
                                                 pools,
                                                 scope,
-                                                interfaceDescriptors,
+                                                interfaces,
                                                 _settings));
             await client.ConnectAsync(actualCt);
             yield return client;

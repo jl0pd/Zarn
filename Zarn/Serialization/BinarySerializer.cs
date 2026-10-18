@@ -12,7 +12,7 @@ public abstract class BinarySerializer
         var writer = new ArrayBufferWriter<byte>(256);
         writer.GetSpan()[0] = (byte)ObjectType.Custom;
         writer.Advance(1);
-        TypeBinarySerializer.Instance.Serialize(type, writer, null!);
+        TypeBinarySerializer.SerializeCore(type, writer, null!);
         return writer.WrittenSpan.ToArray();
     }
 
