@@ -201,12 +201,11 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
             var messageLength = (int)PackedInt.Read(initialBuffer, out _);
 
-            var payloadLength = messageLength - headerLength;
-            var message = writer.GetMemory(payloadLength);
+            var message = writer.GetMemory(messageLength);
             bytesRead = 0;
-            while (bytesRead < payloadLength)
+            while (bytesRead < messageLength)
             {
-                var read = await _stream.ReadAsync(message[bytesRead..payloadLength], cancellationToken);
+                var read = await _stream.ReadAsync(message[bytesRead..messageLength], cancellationToken);
                 if (read == 0)
                 {
                     Pools.Return(writer);
@@ -215,7 +214,7 @@ internal sealed class ConnectionContext : IAsyncDisposable
 
                 bytesRead += read;
             }
-            writer.Advance(payloadLength);
+            writer.Advance(messageLength);
 
             HandleMessage(writer);
         }

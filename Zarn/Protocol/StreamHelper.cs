@@ -14,7 +14,7 @@ internal static class StreamHelper
     public static ReadOnlyMemory<byte> PrepareFirstChunk(long totalLength, ChunkedArrayPoolBufferWriter<byte>.Chunk chunk)
     {
         int requiredSize = PackedInt.GetRequiredSize(totalLength);
-        PackedInt.Write(totalLength + requiredSize, chunk.Array.AsSpan(chunk.Start - requiredSize));
+        PackedInt.Write(totalLength, chunk.Array.AsSpan(chunk.Start - requiredSize));
         return chunk.Array.AsMemory(chunk.Start - requiredSize, chunk.Written + requiredSize);
     }
 
@@ -70,12 +70,11 @@ internal static class StreamHelper
 
         var messageLength = (int)PackedInt.Read(initialBuffer, out _);
 
-        var payloadLength = messageLength - headerLength;
-        var message = writer.GetMemory(payloadLength);
+        var message = writer.GetMemory(messageLength);
         bytesRead = 0;
-        while (bytesRead < payloadLength)
+        while (bytesRead < messageLength)
         {
-            var read = await stream.ReadAsync(message[bytesRead..payloadLength], cancellationToken);
+            var read = await stream.ReadAsync(message[bytesRead..messageLength], cancellationToken);
             if (read == 0)
             {
                 ThrowHelper.ThrowEndOfStream();
@@ -83,7 +82,7 @@ internal static class StreamHelper
 
             bytesRead += read;
         }
-        writer.Advance(payloadLength);
+        writer.Advance(messageLength);
 
         return true;
     }
