@@ -22,8 +22,8 @@ public class SerializationTests
     [Theory]
     [InlineData(1, 1)]
     [InlineData(65, 2)]
-    [InlineData(8193, 4)]
-    [InlineData(268_435_457, 8)]
+    [InlineData(8193, 3)]
+    [InlineData(268_435_457, 5)]
     [InlineData(long.MaxValue, 9)]
     public void TestLongSerialization(long value, int byteLength)
     {
@@ -50,8 +50,8 @@ public class SerializationTests
     [Theory]
     [InlineData(1, 1)]
     [InlineData(65, 2)]
-    [InlineData(8193, 4)]
-    [InlineData(int.MaxValue, 8)]
+    [InlineData(8193, 3)]
+    [InlineData(int.MaxValue, 5)]
     public void TestIntSerialization(int value, int byteLength)
     {
         var serializer = new PackedIntBinarySerializer();
@@ -77,8 +77,8 @@ public class SerializationTests
     [Theory]
     [InlineData(1, 1)]
     [InlineData(65, 2)]
-    [InlineData(8193, 4)]
-    [InlineData(short.MaxValue, 4)]
+    [InlineData(8193, 3)]
+    [InlineData(short.MaxValue, 3)]
     public void TestShortSerialization(short value, int byteLength)
     {
         var serializer = new PackedShortBinarySerializer();
